@@ -1,9 +1,10 @@
 from distutils.core import setup
 
 
-setup(name='tornado_multithread',
+setup(name='raii_logging',
       version='1.0.0',
-      packages=['tornado_multithread'],
+      packages=['raii_logging'],
       install_requires=[
         'tornado',
+        'git+https://github.com/legnaleurc/raii_logging.git#egg=raii_logging',
       ])

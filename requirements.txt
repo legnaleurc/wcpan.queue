@@ -1,1 +1,2 @@
+git+https://github.com/legnaleurc/raii_logging.git#egg=raii_logging
 tornado
