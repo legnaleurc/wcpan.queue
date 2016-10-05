@@ -6,5 +6,7 @@ setup(name='raii_logging',
       packages=['raii_logging'],
       install_requires=[
         'tornado',
+      ],
+      dependency_links=[
         'git+https://github.com/legnaleurc/raii_logging.git#egg=raii_logging',
       ])
