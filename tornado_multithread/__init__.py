@@ -1,1 +1,1 @@
-from .worker import AsyncWorker, Task, FlushTask
+from .worker import AsyncWorker, Task, FlushTasks
