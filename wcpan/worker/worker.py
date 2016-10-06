@@ -83,7 +83,7 @@ class AsyncWorker(object):
             except FlushTasks as e:
                 queue = filter(e, self._queue._queue)
                 queue = list(queue)
-                DEBUG('acddl') << 'flush:' << 'before' << len(self._queue._queue) << 'after' << len(queue)
+                DEBUG('wcpan.worker') << 'flush:' << 'before' << len(self._queue._queue) << 'after' << len(queue)
                 self._queue._queue = queue
             except Exception as e:
                 exception = e
