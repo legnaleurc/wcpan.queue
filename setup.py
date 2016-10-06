@@ -6,9 +6,8 @@ setup(
         version='1.0.0.dev1',
         author='Wei-Cheng Pan',
         author_email='legnaleurc@gmail.com',
-        url='https://github.com/legnaleurc/wcpan.logger',
+        url='https://github.com/legnaleurc/wcpan.worker',
         packages=[
-            'wcpan',
             'wcpan.worker',
         ],
         install_requires=[
