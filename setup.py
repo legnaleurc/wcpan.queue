@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
         name='raii_logging',
-        version='1.0.0',
+        version='1.0.0.dev1',
         packages=[
             'wcpan',
             'wcpan.worker',
