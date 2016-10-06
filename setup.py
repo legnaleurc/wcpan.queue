@@ -11,4 +11,8 @@ setup(
         install_requires=[
             'tornado',
             'wcpan.logger',
+        ],
+        classifiers=[
+            'Programming Language :: Python :: 3 :: Only',
+            'Programming Language :: Python :: 3.5',
         ])
