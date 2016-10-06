@@ -1,3 +1,4 @@
-# tornado_multithread
+wcpan.worker
+============
 
 A multithread worker for Tornado.
