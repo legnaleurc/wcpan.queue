@@ -1,12 +1,14 @@
-from distutils.core import setup
+from setuptools import setup
 
 
-setup(name='raii_logging',
-      version='1.0.0',
-      packages=['raii_logging'],
-      install_requires=[
-        'tornado',
-      ],
-      dependency_links=[
-        'git+https://github.com/legnaleurc/raii_logging.git#egg=raii_logging',
-      ])
+setup(
+        name='raii_logging',
+        version='1.0.0',
+        packages=[
+            'wcpan',
+            'wcpan.worker',
+        ],
+        install_requires=[
+            'tornado',
+            'wcpan.logger',
+        ])
