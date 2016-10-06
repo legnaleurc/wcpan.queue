@@ -4,7 +4,7 @@ from unittest import mock as utm
 
 from tornado import gen as tg
 
-from tornado_multithread import worker
+import wcpan.worker as worker
 from . import util as u
 
 

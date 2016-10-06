@@ -4,7 +4,7 @@ import itertools
 import threading
 
 from tornado import gen as tg, ioloop as ti, queues as tq
-from raii_logging import DEBUG
+from wcpan.logger import DEBUG
 
 
 class AsyncWorker(object):
