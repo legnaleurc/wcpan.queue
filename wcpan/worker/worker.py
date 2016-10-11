@@ -2,14 +2,20 @@ import functools
 import inspect
 import itertools
 import threading
+from typing import Any, Awaitable, Callable, Union
 
 from tornado import gen as tg, ioloop as ti, queues as tq
 from wcpan.logger import DEBUG
 
 
+RawTask = Callable[[], Any]
+MaybeTask = Union['Task', RawTask]
+TornadoCallback = Callable[[Any], None]
+
+
 class AsyncWorker(object):
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(AsyncWorker, self).__init__()
 
         self._thread = None
@@ -19,10 +25,10 @@ class AsyncWorker(object):
         self._tail = {}
 
     @property
-    def is_alive(self):
+    def is_alive(self) -> bool:
         return self._thread and self._thread.is_alive()
 
-    def start(self):
+    def start(self) -> None:
         if not self.is_alive:
             self._thread = threading.Thread(target=self._run)
             self._thread.start()
@@ -31,14 +37,14 @@ class AsyncWorker(object):
                 if not self._ready_lock.wait_for(lambda: self._loop is not None, 1):
                     raise Exception('timeout')
 
-    def stop(self):
+    def stop(self) -> None:
         if self._loop is not None:
             self._loop.add_callback(self._loop.stop)
         if self.is_alive:
             self._thread.join()
             self._thread = None
 
-    async def do(self, task):
+    async def do(self, task: MaybeTask) -> Awaitable[Any]:
         task = self._ensure_task(task)
         await self._queue.put(task)
         id_ = id(task)
@@ -47,22 +53,22 @@ class AsyncWorker(object):
         rv = await future
         return rv
 
-    def do_later(self, task):
+    def do_later(self, task: MaybeTask) -> None:
         self._loop.add_callback(self.do, task)
 
-    def _ensure_task(self, maybe_task):
+    def _ensure_task(self, maybe_task: MaybeTask) -> 'Task':
         if not isinstance(maybe_task, Task):
             maybe_task = Task(maybe_task)
         return maybe_task
 
-    def _make_tail(self, id_, callback):
+    def _make_tail(self, id_: int, callback: TornadoCallback) -> None:
         self._tail[id_] = callback
 
-    def _update_tail(self, id_, future):
+    def _update_tail(self, id_: int, future: tg.Future) -> None:
         cb = self._tail[id_]
         self._tail[id_] = (future, cb)
 
-    def _run(self):
+    def _run(self) -> None:
         with self._ready_lock:
             self._loop = ti.IOLoop()
             self._loop.add_callback(self._process)
@@ -71,7 +77,7 @@ class AsyncWorker(object):
         self._loop.close()
         self._loop = None
 
-    async def _process(self):
+    async def _process(self) -> Awaitable[None]:
         while True:
             task = await self._queue.get()
             rv = None
@@ -104,44 +110,44 @@ class Task(object):
 
     _counter = itertools.count()
 
-    def __init__(self, callable_=None):
+    def __init__(self, callable_: RawTask = None) -> None:
         super(Task, self).__init__()
 
         self._callable = callable_
         # FIXME atomic because GIL
         self._id = next(self._counter)
 
-    def __eq__(self, that):
+    def __eq__(self, that: 'Task') -> bool:
         return self.priority == that.priority and self.id_ == that.id_
 
-    def __gt__(self, that):
+    def __gt__(self, that: 'Task') -> bool:
         if self.priority < that.priority:
             return True
         if self.priority > that.priority:
             return False
         return self.id_ > that.id_
 
-    def __call__(self):
+    def __call__(self) -> Any:
         if not self._callable:
             raise NotImplementedError()
         return self._callable()
 
     # highest first
     @property
-    def priority(self):
+    def priority(self) -> int:
         return 0
 
     @property
-    def id_(self):
+    def id_(self) -> int:
         return self._id
 
 
 class FlushTasks(Exception):
 
-    def __init__(self, filter_):
+    def __init__(self, filter_: Callable[[Task], bool]) -> None:
         super(FlushTasks, self).__init__()
 
         self._filter = filter_
 
-    def __call__(self, task):
+    def __call__(self, task: Task) -> bool:
         return self._filter(task)
