@@ -14,9 +14,6 @@ setup(
         author='Wei-Cheng Pan',
         author_email='legnaleurc@gmail.com',
         url='https://github.com/legnaleurc/wcpan.worker',
-        namespace_packages=[
-            'wcpan',
-        ],
         packages=[
             'wcpan.worker',
         ],

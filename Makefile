@@ -7,7 +7,7 @@ upload: clean all
 	twine upload ./dist/*
 
 clean:
-	rm -rf ./dist
+	rm -rf ./dist ./build ./*.egg-info
 
 test:
 	python -m unittest
