@@ -21,6 +21,7 @@ class AsyncWorker(object):
         self._thread = None
         self._ready_lock = threading.Condition()
         self._loop = None
+        # FIXME thread safe
         self._queue = tq.PriorityQueue()
         self._tail = {}
 
@@ -46,10 +47,11 @@ class AsyncWorker(object):
 
     async def do(self, task: MaybeTask) -> Awaitable[Any]:
         task = ensure_task(task)
-        await self._queue.put(task)
         id_ = id(task)
         future = tg.Task(functools.partial(self._make_tail, id_))
         self._update_tail(id_, future)
+
+        await self._queue.put(task)
         rv = await future
         return rv
 
@@ -59,6 +61,10 @@ class AsyncWorker(object):
         else:
             fn = functools.partial(self.do, task)
         self._loop.add_callback(fn)
+
+    def flush(self, filter_: Callable[['Task'], bool]) -> None:
+        task = FlushTask(filter_)
+        self.do_later(task)
 
     async def _wrapped_do(self, task: MaybeTask, callback: AwaitCallback) -> None:
         rv = await self.do(task)
@@ -83,17 +89,23 @@ class AsyncWorker(object):
     async def _process(self) -> Awaitable[None]:
         while True:
             task = await self._queue.get()
+
+            if isinstance(task, FlushTask):
+                self._queue.task_done()
+
+                queue = filter(lambda _: not task(_), self._queue._queue)
+                queue = list(queue)
+                DEBUG('wcpan.worker') << 'flush:' << 'before' << len(self._queue._queue) << 'after' << len(queue)
+                self._queue._queue = queue
+
+                continue
+
             rv = None
             exception = None
             try:
                 rv = task()
                 if inspect.isawaitable(rv):
                     rv = await rv
-            except FlushTasks as e:
-                queue = filter(e, self._queue._queue)
-                queue = list(queue)
-                DEBUG('wcpan.worker') << 'flush:' << 'before' << len(self._queue._queue) << 'after' << len(queue)
-                self._queue._queue = queue
             except Exception as e:
                 exception = e
             finally:
@@ -121,14 +133,14 @@ class Task(object):
         self._id = next(self._counter)
 
     def __eq__(self, that: 'Task') -> bool:
-        return self.priority == that.priority and self.id_ == that.id_
+        if not isinstance(that, self.__class__):
+            return NotImplemented
+        return self.equal(that)
 
     def __gt__(self, that: 'Task') -> bool:
-        if self.priority < that.priority:
-            return True
-        if self.priority > that.priority:
-            return False
-        return self.id_ > that.id_
+        if not isinstance(that, self.__class__):
+            return NotImplemented
+        return not self.higher_then(that)
 
     def __call__(self) -> Any:
         if not self._callable:
@@ -144,16 +156,47 @@ class Task(object):
     def id_(self) -> int:
         return self._id
 
+    def equal(self, that: 'Task') -> bool:
+        return self.priority == that.priority and self.id_ == that.id_
 
-class FlushTasks(Exception):
+    def higher_then(self, that: 'Task') -> bool:
+        if self.priority > that.priority:
+            return True
+        if self.priority < that.priority:
+            return False
+        # lower ID was created earlier
+        return self.id_ < that.id_
+
+
+# ATTENTION DO NOT inherit this class
+class FlushTask(Task):
 
     def __init__(self, filter_: Callable[[Task], bool]) -> None:
-        super(FlushTasks, self).__init__()
+        super(FlushTask, self).__init__()
 
         self._filter = filter_
 
     def __call__(self, task: Task) -> bool:
         return self._filter(task)
+
+    def __eq__(self, that: 'Task') -> bool:
+        rv = self.equal(that)
+        return rv
+
+    def __gt__(self, that: 'Task') -> bool:
+        rv = not self.higher_then(that)
+        return rv
+
+    def equal(self, that: 'Task'):
+        if isinstance(that, self.__class__):
+            return self.id_ == that.id_
+        return False
+
+    def higher_then(self, that: 'Task') -> bool:
+        if not isinstance(that, self.__class__):
+            return True
+        # lower ID was created earlier
+        return self.id_ < that.id_
 
 
 def ensure_task(maybe_task: MaybeTask) -> 'Task':

@@ -106,15 +106,25 @@ class TestAsyncWorker(ut.TestCase):
         self.assertEqual(side, [third_task, second_task])
 
     def testFlush(self):
-        first_task = self._createAsyncMock()
+        first_task = self._createAsyncMock(2)
         side = []
         second_task = FakeTask(side, 1)
-        third_task = FlushFakeTask(side, 1)
         self._worker.do_later(first_task)
         self._worker.do_later(second_task)
-        self._worker.do_later(third_task)
+
+        # wait until first_task is running
         u.async_call(functools.partial(tg.sleep, 0.5))
-        self.assertEqual(side, [third_task])
+        self.assertEqual(len(self._worker._queue._queue), 1)
+
+        # wait until flush task enter the queue
+        self._worker.flush(lambda _: _.priority == -2)
+        u.async_call(functools.partial(tg.sleep, 0.5))
+        self.assertEqual(len(self._worker._queue._queue), 2)
+        self.assertIsNot(self._worker._queue._queue[0].__class__, FakeTask)
+
+        # wait until idle
+        u.async_call(functools.partial(tg.sleep, 1.5))
+        self.assertEqual(side, [])
 
     def testDoWithException(self):
         def fn():
@@ -134,8 +144,8 @@ class TestAsyncWorker(ut.TestCase):
     def _createSyncMock(self):
         return utm.Mock(return_value=42)
 
-    def _createAsyncMock(self):
-        return u.AsyncMock(return_value=42)
+    def _createAsyncMock(self, delay=None):
+        return u.AsyncMock(return_value=42, delay=delay)
 
 
 class TestTask(ut.TestCase):
@@ -174,23 +184,6 @@ class FakeTask(worker.Task):
     @property
     def priority(self):
         return -2
-
-
-class FlushFakeTask(FakeTask):
-
-    def __init__(self, side, order):
-        super(FlushFakeTask, self).__init__(side, order)
-
-    def __call__(self):
-        self._side.append(self)
-        raise worker.FlushTasks(self._filter)
-
-    @property
-    def priority(self):
-        return -1
-
-    def _filter(self, task):
-        return task.priority != -2
 
 
 class TestException(Exception):
