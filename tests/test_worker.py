@@ -127,7 +127,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         # wait until first_task is running
         yield tg.moment
         q = self._getInternalQueue()
-        self.assertEqual(len(q), 1)
+        self.assertEqual(len(q), 2)
 
         # flush tasks
         yield self._worker.flush(lambda _: _.priority == -2)
@@ -186,7 +186,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         return u.AsyncMock(return_value=42, delay=delay)
 
     def _getInternalQueue(self):
-        return self._worker._queue._queue
+        return self._worker._queue.queue
 
 
 class TestTask(ut.TestCase):

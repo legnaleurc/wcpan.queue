@@ -1,10 +1,11 @@
 import functools
 import inspect
 import itertools
+import queue
 import threading
 from typing import Any, Awaitable, Callable, Iterable, List, Union
 
-from tornado import gen as tg, ioloop as ti, queues as tq
+from tornado import gen as tg, ioloop as ti
 from wcpan.logger import DEBUG
 
 
@@ -22,8 +23,9 @@ class AsyncWorker(object):
         self._ready_lock = threading.Condition()
         self._loop = None
         # FIXME thread safe
-        self._queue = tq.PriorityQueue()
+        self._queue = queue.PriorityQueue()
         self._tail = {}
+        self._tail_lock = threading.Lock()
 
     @property
     def is_alive(self) -> bool:
@@ -39,29 +41,30 @@ class AsyncWorker(object):
                     raise Exception('timeout')
 
     def stop(self) -> None:
-        if self._loop is not None:
-            self._loop.add_callback(self._loop.stop)
         if self.is_alive:
+            task = TerminalTask()
+            self._queue.put(task)
             self._thread.join()
             self._thread = None
 
     async def do(self, task: MaybeTask) -> Awaitable[Any]:
         task = ensure_task(task)
-        id_ = id(task)
-        future = tg.Task(functools.partial(self._make_tail, id_))
+
+        future = tg.Task(functools.partial(self.do_later, task))
+
+        id_ = task.id_
         self._update_tail(id_, future)
 
-        await self._queue.put(task)
         rv = await future
         return rv
 
     def do_later(self, task: MaybeTask, callback: AwaitCallback = None) -> None:
-        if callback:
-            fn = functools.partial(self._wrapped_do, task, callback)
-        else:
-            fn = functools.partial(self.do, task)
-        loop = ti.IOLoop.current()
-        loop.add_callback(fn)
+        task = ensure_task(task)
+
+        id_ = task.id_
+        self._make_tail(id_, callback)
+
+        self._queue.put(task)
 
     async def flush(self, filter_: Callable[['Task'], bool]) -> Awaitable[None]:
         task = FlushTask(filter_)
@@ -71,29 +74,35 @@ class AsyncWorker(object):
         task = FlushTask(filter_)
         self.do_later(task, callback)
 
-    async def _wrapped_do(self, task: MaybeTask, callback: AwaitCallback) -> None:
-        rv = await self.do(task)
-        callback(rv)
-
     def _make_tail(self, id_: int, callback: AwaitCallback) -> None:
-        self._tail[id_] = callback
+        with self._tail_lock:
+            self._tail[id_] = None, callback
 
     def _update_tail(self, id_: int, future: tg.Future) -> None:
-        cb = self._tail[id_]
-        self._tail[id_] = (future, cb)
+        assert id_ in self._tail, 'invalid task id'
+
+        with self._tail_lock:
+            _, callback = self._tail[id_]
+            assert _ is None, 'replacing existing future'
+
+            self._tail[id_] = future, callback
 
     def _do_flush(self, task: 'FlushTask') -> None:
-        q = self._get_internal_queue()
-        nq = filter(lambda _: not task(_), q)
-        nq = list(nq)
-        DEBUG('wcpan.worker') << 'flush:' << 'before' << len(q) << 'after' << len(nq)
-        self._set_internal_queue(nq)
+        with self._get_internal_mutex():
+            q = self._get_internal_queue()
+            nq = filter(lambda _: not task(_), q)
+            nq = list(nq)
+            DEBUG('wcpan.worker') << 'flush:' << 'before' << len(q) << 'after' << len(nq)
+            self._set_internal_queue(nq)
 
     def _get_internal_queue(self) -> Iterable:
-        return self._queue._queue
+        return self._queue.queue
 
     def _set_internal_queue(self, nq: List) -> None:
-        self._queue._queue = nq
+        self._queue.queue = nq
+
+    def _get_internal_mutex(self):
+        return self._queue.mutex
 
     def _run(self) -> None:
         with self._ready_lock:
@@ -106,11 +115,13 @@ class AsyncWorker(object):
 
     async def _process(self) -> Awaitable[None]:
         while True:
-            task = await self._queue.get()
+            task = self._queue.get()
             rv = None
             exception = None
             try:
-                if isinstance(task, FlushTask):
+                if isinstance(task, TerminalTask):
+                    break
+                elif isinstance(task, FlushTask):
                     rv = self._do_flush(task)
                 else:
                     rv = await regular_call(task)
@@ -118,14 +129,16 @@ class AsyncWorker(object):
                 exception = e
             finally:
                 self._queue.task_done()
-                id_ = id(task)
-                future, done = self._tail.get(id_, (None, None))
-                if future or done:
-                    del self._tail[id_]
+                id_ = task.id_
+                with self._tail_lock:
+                    future, done = self._tail.get(id_, (None, None))
+                    if id_ in self._tail:
+                        del self._tail[id_]
                 if exception and future:
                     future.set_exception(exception)
                 elif done:
                     done(rv)
+        self._loop.stop()
 
 
 @functools.total_ordering
@@ -141,13 +154,9 @@ class Task(object):
         self._id = next(self._counter)
 
     def __eq__(self, that: 'Task') -> bool:
-        if not isinstance(that, self.__class__):
-            return NotImplemented
         return self.equal(that)
 
     def __lt__(self, that: 'Task') -> bool:
-        if not isinstance(that, self.__class__):
-            return NotImplemented
         return self.higher_then(that)
 
     def __call__(self) -> Any:
@@ -165,9 +174,13 @@ class Task(object):
         return self._id
 
     def equal(self, that: 'Task') -> bool:
-        return self.priority == that.priority and self.id_ == that.id_
+        if not isinstance(that, self.__class__):
+            return NotImplemented
+        return self.id_ == that.id_
 
     def higher_then(self, that: 'Task') -> bool:
+        if not isinstance(that, self.__class__):
+            return NotImplemented
         if self.priority > that.priority:
             return True
         if self.priority < that.priority:
@@ -176,35 +189,53 @@ class Task(object):
         return self.id_ < that.id_
 
 
-# ATTENTION DO NOT inherit this class
-class FlushTask(Task):
+# ATTENTION DO NOT use this class
+class InternalTask(Task):
 
-    def __init__(self, filter_: Callable[[Task], bool]) -> None:
-        super(FlushTask, self).__init__()
-
-        self._filter = filter_
-
-    def __call__(self, task: Task) -> bool:
-        return self._filter(task)
-
-    def __eq__(self, that: Task) -> bool:
-        rv = self.equal(that)
-        return rv
-
-    def __lt__(self, that: Task) -> bool:
-        rv = self.higher_then(that)
-        return rv
+    def __init__(self, *args, **kwargs) -> None:
+        super(InternalTask, self).__init__(*args, **kwargs)
 
     def equal(self, that: Task) -> bool:
-        if isinstance(that, self.__class__):
-            return self.id_ == that.id_
-        return False
+        # if not same type, always non-equal
+        if self.__class__ is not that.__class__:
+            return False
+        return self.id_ == that.id_
 
     def higher_then(self, that: Task) -> bool:
-        if not isinstance(that, self.__class__):
+        # if not internal task, it has lower priority
+        if not isinstance(that, InternalTask):
             return True
+        if self.priority > that.priority:
+            return True
+        if self.priority < that.priority:
+            return False
         # lower ID was created earlier
         return self.id_ < that.id_
+
+
+# ATTENTION DO NOT use this class
+class FlushTask(InternalTask):
+
+    def __init__(self, filter_: Callable[[Task], bool]) -> None:
+        super(FlushTask, self).__init__(callable_=filter_)
+
+    def __call__(self, task: Task) -> bool:
+        return self._callable(task)
+
+    @property
+    def priority(self) -> int:
+        return 1
+
+
+# ATTENTION DO NOT use this class
+class TerminalTask(InternalTask):
+
+    def __init__(self) -> None:
+        super(TerminalTask, self).__init__()
+
+    @property
+    def priority(self) -> int:
+        return 2
 
 
 def ensure_task(maybe_task: MaybeTask) -> Task:
