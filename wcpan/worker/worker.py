@@ -10,7 +10,7 @@ from wcpan.logger import DEBUG
 
 RawTask = Callable[[], Any]
 MaybeTask = Union['Task', RawTask]
-TornadoCallback = Callable[[Any], None]
+AwaitCallback = Callable[[Any], None]
 
 
 class AsyncWorker(object):
@@ -45,7 +45,7 @@ class AsyncWorker(object):
             self._thread = None
 
     async def do(self, task: MaybeTask) -> Awaitable[Any]:
-        task = self._ensure_task(task)
+        task = ensure_task(task)
         await self._queue.put(task)
         id_ = id(task)
         future = tg.Task(functools.partial(self._make_tail, id_))
@@ -53,15 +53,18 @@ class AsyncWorker(object):
         rv = await future
         return rv
 
-    def do_later(self, task: MaybeTask) -> None:
-        self._loop.add_callback(self.do, task)
+    def do_later(self, task: MaybeTask, callback: AwaitCallback = None) -> None:
+        if callback:
+            fn = functools.partial(self._wrapped_do, task, callback)
+        else:
+            fn = functools.partial(self.do, task)
+        self._loop.add_callback(fn)
 
-    def _ensure_task(self, maybe_task: MaybeTask) -> 'Task':
-        if not isinstance(maybe_task, Task):
-            maybe_task = Task(maybe_task)
-        return maybe_task
+    async def _wrapped_do(self, task: MaybeTask, callback: AwaitCallback) -> None:
+        rv = await self.do(task)
+        callback(rv)
 
-    def _make_tail(self, id_: int, callback: TornadoCallback) -> None:
+    def _make_tail(self, id_: int, callback: AwaitCallback) -> None:
         self._tail[id_] = callback
 
     def _update_tail(self, id_: int, future: tg.Future) -> None:
@@ -151,3 +154,9 @@ class FlushTasks(Exception):
 
     def __call__(self, task: Task) -> bool:
         return self._filter(task)
+
+
+def ensure_task(maybe_task: MaybeTask) -> 'Task':
+    if not isinstance(maybe_task, Task):
+        maybe_task = Task(maybe_task)
+    return maybe_task

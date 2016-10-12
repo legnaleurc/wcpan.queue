@@ -123,6 +123,14 @@ class TestAsyncWorker(ut.TestCase):
         with self.assertRaises(TestException):
             u.async_call(self._worker.do, fn)
 
+    def testDoLaterWithCallback(self):
+        fn = self._createSyncMock()
+        cb = utm.MagicMock()
+        self._worker.do_later(fn, cb)
+        u.async_call(functools.partial(tg.sleep, 0.5))
+        fn.assert_called_once_with()
+        cb.assert_called_once_with(42)
+
     def _createSyncMock(self):
         return utm.Mock(return_value=42)
 
