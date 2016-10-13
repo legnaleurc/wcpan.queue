@@ -1,4 +1,3 @@
-import functools
 from unittest import mock as utm
 
 from tornado import ioloop as ti, gen as tg
