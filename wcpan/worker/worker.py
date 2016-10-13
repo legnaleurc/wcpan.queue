@@ -187,7 +187,7 @@ class FlushTask(Task):
         rv = not self.higher_then(that)
         return rv
 
-    def equal(self, that: 'Task'):
+    def equal(self, that: 'Task') -> bool:
         if isinstance(that, self.__class__):
             return self.id_ == that.id_
         return False
