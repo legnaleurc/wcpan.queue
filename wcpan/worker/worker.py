@@ -63,6 +63,10 @@ class AsyncWorker(object):
         loop = ti.IOLoop.current()
         loop.add_callback(fn)
 
+    async def flush(self, filter_: Callable[['Task'], bool]) -> Awaitable[None]:
+        task = FlushTask(filter_)
+        await self.do(task)
+
     def flush_later(self, filter_: Callable[['Task'], bool], callback: AwaitCallback = None) -> None:
         task = FlushTask(filter_)
         self.do_later(task, callback)
