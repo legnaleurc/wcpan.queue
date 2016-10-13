@@ -2,21 +2,23 @@ import functools
 import unittest as ut
 from unittest import mock as utm
 
-from tornado import gen as tg
+from tornado import gen as tg, testing as tt
 
 import wcpan.worker as worker
 from . import util as u
 
 
-class TestAsyncWorker(ut.TestCase):
+class TestAsyncWorker(tt.AsyncTestCase):
 
     def setUp(self):
+        super(TestAsyncWorker, self).setUp()
         self._worker = worker.AsyncWorker()
         self._worker.start()
         self.assertTrue(self._worker.is_alive)
 
     def tearDown(self):
-        u.async_call(self._worker.stop)
+        self._worker.stop()
+        super(TestAsyncWorker, self).tearDown()
         self.assertFalse(self._worker.is_alive)
 
     @utm.patch('tornado.ioloop.IOLoop', autospec=True)
@@ -43,57 +45,66 @@ class TestAsyncWorker(ut.TestCase):
         self.assertIsNone(w._thread)
         self.assertIsNone(w._loop)
 
+    @tt.gen_test
     def testDoWithSync(self):
         fn = self._createSyncMock()
-        rv = u.async_call(self._worker.do, fn)
+        rv = yield self._worker.do(fn)
         fn.assert_called_once_with()
         self.assertEqual(rv, 42)
 
+    @tt.gen_test
     def testDoWithAsync(self):
         fn = self._createAsyncMock()
-        rv = u.async_call(self._worker.do, fn)
+        rv = yield self._worker.do(fn)
         fn.assert_called_once_with()
         fn.assert_awaited()
         self.assertEqual(rv, 42)
 
+    @tt.gen_test
     def testDoLaterWithSync(self):
         fn = self._createSyncMock()
         self._worker.do_later(fn)
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         fn.assert_called_once_with()
 
+    @tt.gen_test
     def testDoLaterWithAsync(self):
         fn = self._createAsyncMock()
         self._worker.do_later(fn)
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         fn.assert_called_once_with()
 
+    @tt.gen_test
     def testDoWithSyncPartial(self):
         fn = self._createSyncMock()
-        rv = u.async_call(self._worker.do, functools.partial(fn, 1, k=7))
+        rv = yield self._worker.do(functools.partial(fn, 1, k=7))
         fn.assert_called_once_with(1, k=7)
         self.assertEqual(rv, 42)
 
+    @tt.gen_test
     def testDoWithAsyncPartial(self):
         fn = self._createAsyncMock()
-        rv = u.async_call(self._worker.do, functools.partial(fn, 1, k=7))
+        rv = yield self._worker.do(functools.partial(fn, 1, k=7))
         fn.assert_called_once_with(1, k=7)
         fn.assert_awaited()
         self.assertEqual(rv, 42)
 
+    @tt.gen_test
     def testDoLaterWithSyncPartial(self):
         fn = self._createSyncMock()
         self._worker.do_later(functools.partial(fn, 1, k=7))
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         fn.assert_called_once_with(1, k=7)
 
+    @tt.gen_test
     def testDoLaterWithAsyncPartial(self):
         fn = self._createAsyncMock()
         self._worker.do_later(functools.partial(fn, 1, k=7))
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         fn.assert_called_once_with(1, k=7)
         fn.assert_awaited()
 
+    @tt.gen_test
     def testRunOrder(self):
         first_task = self._createAsyncMock()
         side = []
@@ -102,9 +113,10 @@ class TestAsyncWorker(ut.TestCase):
         self._worker.do_later(first_task)
         self._worker.do_later(second_task)
         self._worker.do_later(third_task)
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         self.assertEqual(side, [third_task, second_task])
 
+    @tt.gen_test
     def testFlush(self):
         first_task = self._createAsyncMock(2)
         side = []
@@ -113,31 +125,33 @@ class TestAsyncWorker(ut.TestCase):
         self._worker.do_later(second_task)
 
         # wait until first_task is running
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         self.assertEqual(len(self._worker._queue._queue), 1)
 
         # wait until flush task enter the queue
         self._worker.flush(lambda _: _.priority == -2)
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         self.assertEqual(len(self._worker._queue._queue), 2)
         self.assertIsNot(self._worker._queue._queue[0].__class__, FakeTask)
 
         # wait until idle
-        u.async_call(functools.partial(tg.sleep, 1.5))
+        yield tg.sleep(1.5)
         self.assertEqual(side, [])
 
+    @tt.gen_test
     def testDoWithException(self):
         def fn():
             raise TestException('magic')
 
         with self.assertRaises(TestException):
-            u.async_call(self._worker.do, fn)
+            yield self._worker.do(fn)
 
+    @tt.gen_test
     def testDoLaterWithCallback(self):
         fn = self._createSyncMock()
         cb = utm.MagicMock()
         self._worker.do_later(fn, cb)
-        u.async_call(functools.partial(tg.sleep, 0.5))
+        yield tg.sleep(0.5)
         fn.assert_called_once_with()
         cb.assert_called_once_with(42)
 

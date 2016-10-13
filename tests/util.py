@@ -20,7 +20,3 @@ class AsyncMock(utm.Mock):
 
     def assert_awaited(self):
         assert self._awaited
-
-
-def async_call(fn, *args, **kwargs):
-    return ti.IOLoop.instance().run_sync(functools.partial(fn, *args, **kwargs))
