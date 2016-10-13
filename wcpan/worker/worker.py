@@ -60,7 +60,8 @@ class AsyncWorker(object):
             fn = functools.partial(self._wrapped_do, task, callback)
         else:
             fn = functools.partial(self.do, task)
-        self._loop.add_callback(fn)
+        loop = ti.IOLoop.current()
+        loop.add_callback(fn)
 
     def flush(self, filter_: Callable[['Task'], bool]) -> None:
         task = FlushTask(filter_)
