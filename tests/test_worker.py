@@ -117,7 +117,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         self.assertEqual(side, [third_task, second_task])
 
     @tt.gen_test
-    def testFlush(self):
+    def testFlushLater(self):
         first_task = self._createAsyncMock(2)
         side = []
         second_task = FakeTask(side, 1)
@@ -129,7 +129,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         self.assertEqual(len(self._worker._queue._queue), 1)
 
         # wait until flush task enter the queue
-        self._worker.flush(lambda _: _.priority == -2)
+        self._worker.flush_later(lambda _: _.priority == -2)
         yield tg.sleep(0.5)
         self.assertEqual(len(self._worker._queue._queue), 2)
         self.assertIsNot(self._worker._queue._queue[0].__class__, FakeTask)
