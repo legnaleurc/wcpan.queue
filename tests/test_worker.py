@@ -126,13 +126,15 @@ class TestAsyncWorker(tt.AsyncTestCase):
 
         # wait until first_task is running
         yield tg.sleep(0.5)
-        self.assertEqual(len(self._worker._queue._queue), 1)
+        q = self._getInternalQueue()
+        self.assertEqual(len(q), 1)
 
         # wait until flush task enter the queue
         self._worker.flush_later(lambda _: _.priority == -2)
         yield tg.sleep(0.5)
-        self.assertEqual(len(self._worker._queue._queue), 2)
-        self.assertIsNot(self._worker._queue._queue[0].__class__, FakeTask)
+        q = self._getInternalQueue()
+        self.assertEqual(len(q), 2)
+        self.assertIsNot(q[0].__class__, FakeTask)
 
         # wait until idle
         yield tg.sleep(1.5)
@@ -160,6 +162,9 @@ class TestAsyncWorker(tt.AsyncTestCase):
 
     def _createAsyncMock(self, delay=None):
         return u.AsyncMock(return_value=42, delay=delay)
+
+    def _getInternalQueue(self):
+        return self._worker._queue._queue
 
 
 class TestTask(ut.TestCase):
