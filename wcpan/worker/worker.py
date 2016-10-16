@@ -2,7 +2,7 @@ import functools
 import inspect
 import itertools
 import threading
-from typing import Any, Awaitable, Callable, Union
+from typing import Any, Awaitable, Callable, Iterable, List, Union
 
 from tornado import gen as tg, ioloop as ti, queues as tq
 from wcpan.logger import DEBUG
@@ -78,6 +78,19 @@ class AsyncWorker(object):
         cb = self._tail[id_]
         self._tail[id_] = (future, cb)
 
+    def _do_flush(self, task: 'FlushTask') -> None:
+        q = self._get_internal_queue()
+        nq = filter(lambda _: not task(_), q)
+        nq = list(nq)
+        DEBUG('wcpan.worker') << 'flush:' << 'before' << len(q) << 'after' << len(nq)
+        self._set_internal_queue(nq)
+
+    def _get_internal_queue(self) -> Iterable:
+        return self._queue._queue
+
+    def _set_internal_queue(self, nq: List) -> None:
+        self._queue._queue = nq
+
     def _run(self) -> None:
         with self._ready_lock:
             self._loop = ti.IOLoop()
@@ -90,23 +103,13 @@ class AsyncWorker(object):
     async def _process(self) -> Awaitable[None]:
         while True:
             task = await self._queue.get()
-
-            if isinstance(task, FlushTask):
-                self._queue.task_done()
-
-                queue = filter(lambda _: not task(_), self._queue._queue)
-                queue = list(queue)
-                DEBUG('wcpan.worker') << 'flush:' << 'before' << len(self._queue._queue) << 'after' << len(queue)
-                self._queue._queue = queue
-
-                continue
-
             rv = None
             exception = None
             try:
-                rv = task()
-                if inspect.isawaitable(rv):
-                    rv = await rv
+                if isinstance(task, FlushTask):
+                    rv = self._do_flush(task)
+                else:
+                    rv = await regular_call(task)
             except Exception as e:
                 exception = e
             finally:
@@ -204,3 +207,10 @@ def ensure_task(maybe_task: MaybeTask) -> Task:
     if not isinstance(maybe_task, Task):
         maybe_task = Task(maybe_task)
     return maybe_task
+
+
+async def regular_call(task: Task) -> Awaitable[Any]:
+    rv = task()
+    if inspect.isawaitable(rv):
+        rv = await rv
+    return rv
