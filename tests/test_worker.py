@@ -181,12 +181,12 @@ class FakeTask(worker.Task):
     def __eq__(self, that):
         return self.priority == that.priority and self._order == that._order
 
-    def __gt__(self, that):
-        if self.priority < that.priority:
-            return True
+    def __lt__(self, that):
         if self.priority > that.priority:
+            return True
+        if self.priority < that.priority:
             return False
-        return self._order < that._order
+        return self._order > that._order
 
     def __call__(self):
         self._side.append(self)

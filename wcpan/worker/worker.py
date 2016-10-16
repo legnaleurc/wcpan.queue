@@ -138,10 +138,10 @@ class Task(object):
             return NotImplemented
         return self.equal(that)
 
-    def __gt__(self, that: 'Task') -> bool:
+    def __lt__(self, that: 'Task') -> bool:
         if not isinstance(that, self.__class__):
             return NotImplemented
-        return not self.higher_then(that)
+        return self.higher_then(that)
 
     def __call__(self) -> Any:
         if not self._callable:
@@ -184,8 +184,8 @@ class FlushTask(Task):
         rv = self.equal(that)
         return rv
 
-    def __gt__(self, that: Task) -> bool:
-        rv = not self.higher_then(that)
+    def __lt__(self, that: Task) -> bool:
+        rv = self.higher_then(that)
         return rv
 
     def equal(self, that: Task) -> bool:
