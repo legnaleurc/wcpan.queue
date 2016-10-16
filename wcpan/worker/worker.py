@@ -180,27 +180,27 @@ class FlushTask(Task):
     def __call__(self, task: Task) -> bool:
         return self._filter(task)
 
-    def __eq__(self, that: 'Task') -> bool:
+    def __eq__(self, that: Task) -> bool:
         rv = self.equal(that)
         return rv
 
-    def __gt__(self, that: 'Task') -> bool:
+    def __gt__(self, that: Task) -> bool:
         rv = not self.higher_then(that)
         return rv
 
-    def equal(self, that: 'Task') -> bool:
+    def equal(self, that: Task) -> bool:
         if isinstance(that, self.__class__):
             return self.id_ == that.id_
         return False
 
-    def higher_then(self, that: 'Task') -> bool:
+    def higher_then(self, that: Task) -> bool:
         if not isinstance(that, self.__class__):
             return True
         # lower ID was created earlier
         return self.id_ < that.id_
 
 
-def ensure_task(maybe_task: MaybeTask) -> 'Task':
+def ensure_task(maybe_task: MaybeTask) -> Task:
     if not isinstance(maybe_task, Task):
         maybe_task = Task(maybe_task)
     return maybe_task
