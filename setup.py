@@ -8,7 +8,7 @@ with open(op.join(op.dirname(__file__), './README.rst')) as fin:
 
 setup(
         name='wcpan.worker',
-        version='1.0.0.dev4',
+        version='1.0.0.dev5',
         description='A multithread worker for Tornado',
         long_description=long_description,
         author='Wei-Cheng Pan',
