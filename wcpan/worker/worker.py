@@ -6,7 +6,7 @@ import threading
 from typing import Any, Awaitable, Callable, Iterable, List, Union
 
 from tornado import gen as tg, ioloop as ti
-from wcpan.logger import DEBUG
+from wcpan.logger import DEBUG, EXCEPTION
 
 
 RawTask = Callable[[], Any]
@@ -134,10 +134,19 @@ class AsyncWorker(object):
                     future, done = self._tail.get(id_, (None, None))
                     if id_ in self._tail:
                         del self._tail[id_]
-                if exception and future:
-                    future.set_exception(exception)
+                if exception:
+                    if future:
+                        future.set_exception(exception)
+                    else:
+                        # FIXME perfect logging
+                        try:
+                            raise exception
+                        except Exception as e:
+                            EXCEPTION('wcpan.worker') << 'uncought exception'
                 elif done:
                     done(rv)
+                else:
+                    DEBUG('wcpan.worker') << 'unused return value:' << rv
         self._loop.stop()
 
 
