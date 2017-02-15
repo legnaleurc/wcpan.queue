@@ -143,11 +143,7 @@ class AsyncWorker(object):
                     if future:
                         future.set_exception(exception)
                     else:
-                        # FIXME perfect logging
-                        try:
-                            raise exception
-                        except Exception as e:
-                            EXCEPTION('wcpan.worker') << 'uncought exception'
+                        EXCEPTION('wcpan.worker', exception) << 'uncought exception'
                 elif done:
                     done(rv)
                 else:
