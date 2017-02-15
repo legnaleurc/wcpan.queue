@@ -48,10 +48,12 @@ class AsyncWorker(object):
             self._thread = None
 
     async def do(self, task: MaybeTask) -> Awaitable[Any]:
+        if not self.is_alive:
+            raise WorkerError('worker is dead')
+
         task = ensure_task(task)
-
-        future = tg.Task(functools.partial(self.do_later, task))
-
+        fn = functools.partial(self.do_later, task)
+        future = tg.Task(fn)
         id_ = task.id_
         self._update_tail(id_, future)
 
@@ -59,6 +61,9 @@ class AsyncWorker(object):
         return rv
 
     def do_later(self, task: MaybeTask, callback: AwaitCallback = None) -> None:
+        if not self.is_alive:
+            raise WorkerError('worker is dead')
+
         task = ensure_task(task)
 
         id_ = task.id_
@@ -245,6 +250,12 @@ class TerminalTask(InternalTask):
     @property
     def priority(self) -> int:
         return 2
+
+
+class WorkerError(Exception):
+
+    def __init__(self, message):
+        super(WorkerError, self).__init__(message)
 
 
 def ensure_task(maybe_task: MaybeTask) -> Task:
