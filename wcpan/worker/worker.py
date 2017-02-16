@@ -38,7 +38,8 @@ class AsyncWorker(object):
         with self._ready_lock:
             if self._loop is None:
                 if not self._ready_lock.wait_for(lambda: self._loop is not None, 1):
-                    raise Exception('timeout')
+                    raise WorkerError('timeout start')
+                    # FIXME cleanup
 
     def stop(self) -> None:
         if self.is_alive:
