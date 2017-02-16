@@ -24,5 +24,12 @@ class TestAsyncWorkerPool(tt.AsyncTestCase):
         fn.assert_called_once_with()
         self.assertEqual(rv, 42)
 
+    @tt.gen_test
+    def testDoLaterWithSync(self):
+        fn = self._createSyncMock()
+        self._pool.do_later(fn)
+        yield tg.sleep(0.5)
+        fn.assert_called_once_with()
+
     def _createSyncMock(self):
         return utm.Mock(return_value=42)

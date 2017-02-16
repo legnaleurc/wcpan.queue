@@ -38,7 +38,7 @@ class AsyncWorkerPool(object):
             return rv
 
     def do_later(self, task: MaybeTask, callback: AwaitCallback = None) -> None:
-        loop = ti.current()
+        loop = ti.IOLoop.current()
         fn = ft.partial(self._do_later_internal, task, callback)
         loop.add_callback(fn)
 
