@@ -1,6 +1,7 @@
 import functools
 import unittest as ut
 from unittest import mock as utm
+import threading
 
 from tornado import gen as tg, testing as tt
 
@@ -118,24 +119,26 @@ class TestAsyncWorker(tt.AsyncTestCase):
 
     @tt.gen_test
     def testFlush(self):
-        first_task = self._createAsyncMock(0.5)
+        blocker = threading.Event()
+
+        def first_task():
+            blocker.wait()
+
         side = []
         second_task = FakeTask(side, 1)
+
         self._worker.do_later(first_task)
         self._worker.do_later(second_task)
 
-        # wait until first_task is running
-        yield tg.moment
         q = self._getInternalQueue()
         self.assertEqual(len(q), 2)
+
+        blocker.set()
 
         # flush tasks
         yield self._worker.flush(lambda _: _.priority == -2)
         q = self._getInternalQueue()
         self.assertEqual(len(q), 0)
-
-        # wait until idle
-        yield tg.sleep(0.5)
         self.assertEqual(side, [])
 
     @tt.gen_test
