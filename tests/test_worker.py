@@ -186,7 +186,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         return u.AsyncMock(return_value=42, delay=delay)
 
     def _getInternalQueue(self):
-        return self._worker._queue.queue
+        return self._worker._get_internal_queue()
 
 
 class TestTask(ut.TestCase):
