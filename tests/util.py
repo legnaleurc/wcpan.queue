@@ -1,21 +1,133 @@
+import threading
 from unittest import mock as utm
 
 from tornado import ioloop as ti, gen as tg
 
+import wcpan.worker as ww
 
-class AsyncMock(utm.Mock):
 
-    def __init__(self, return_value=None, delay=None):
-        super(AsyncMock, self).__init__(return_value=self)
+class BackgroundTask(ww.Task):
 
-        self._return_value = return_value
-        self._awaited = False
-        self._delay = 0.25 if delay is None else delay
+    def __init__(self, rv=None, p=None, *args, **kwargs):
+        super(BackgroundTask, self).__init__()
+        self._arg = []
+        self._return_value = 42 if rv is None else rv
+        self._priority = 0 if p is None else p
 
-    def __await__(self):
-        yield tg.sleep(self._delay)
-        self._awaited = True
+    def _call(self, *args, **kwargs):
+        self._real_call()
+        self._arg.append((args, kwargs))
         return self._return_value
 
-    def assert_awaited(self):
-        assert self._awaited
+    @property
+    def call_count(self):
+        return len(self._arg)
+
+    @property
+    def called_with(self):
+        return self._arg
+
+    @property
+    def priority(self):
+        return self._priority
+
+
+class AsyncTask(BackgroundTask):
+
+    def __init__(self, *args, **kwargs):
+        super(AsyncTask, self).__init__(*args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        return self._async(*args, **kwargs)
+
+    async def _async(self, *args, **kwargs):
+        return self._call(*args, **kwargs)
+
+
+class SyncTask(BackgroundTask):
+
+    def __init__(self, *args, **kwargs):
+        super(SyncTask, self).__init__(*args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        return self._call(*args, **kwargs)
+
+
+class BlockerMixin(BackgroundTask):
+
+    def __init__(self, *args, **kwargs):
+        super(BlockerMixin, self).__init__(*args, **kwargs)
+        self._enter = threading.Event()
+        self._exit = threading.Event()
+
+    def _real_call(self):
+        self._enter.set()
+        self._exit.wait()
+
+    def wait_for_enter(self):
+        self._enter.wait()
+
+    def continue_for_exit(self):
+        self._exit.set()
+
+    def until_called(self):
+        self.wait_for_enter()
+        self.continue_for_exit()
+
+
+class NonBlockerMixin(BackgroundTask):
+
+    def __init__(self, *args, **kwargs):
+        super(NonBlockerMixin, self).__init__(*args, **kwargs)
+
+    def _real_call(self):
+        pass
+
+
+class AsyncBlocker(AsyncTask, BlockerMixin):
+
+    def __init__(self, *args, **kwargs):
+        super(AsyncBlocker, self).__init__(*args, **kwargs)
+
+
+class Blocker(SyncTask, BlockerMixin):
+
+    def __init__(self, *args, **kwargs):
+        super(Blocker, self).__init__(*args, **kwargs)
+
+
+class AsyncNonBlocker(AsyncTask, NonBlockerMixin):
+
+    def __init__(self, *args, **kwargs):
+        super(AsyncNonBlocker, self).__init__(*args, **kwargs)
+
+
+class NonBlocker(SyncTask, NonBlockerMixin):
+
+    def __init__(self, *args, **kwargs):
+        super(NonBlocker, self).__init__(*args, **kwargs)
+
+
+class ResultCollector(ww.Task):
+
+    def __init__(self):
+        super(ResultCollector, self).__init__()
+        self._return_values = []
+        self._done = threading.Event()
+
+    @property
+    def priority(self):
+        return -1
+
+    def add(self, rv):
+        self._return_values.append(rv)
+
+    def __call__(self):
+        self._done.set()
+
+    def wait(self):
+        self._done.wait()
+
+    @property
+    def values(self):
+        return self._return_values

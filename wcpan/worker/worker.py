@@ -185,12 +185,12 @@ class Task(object):
         return self._id
 
     def equal(self, that: 'Task') -> bool:
-        if not isinstance(that, self.__class__):
+        if not isinstance(that, Task):
             return NotImplemented
         return self.id_ == that.id_
 
     def higher_then(self, that: 'Task') -> bool:
-        if not isinstance(that, self.__class__):
+        if not isinstance(that, Task):
             return NotImplemented
         if self.priority > that.priority:
             return True

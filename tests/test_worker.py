@@ -1,11 +1,11 @@
-import functools
+import functools as ft
 import unittest as ut
 from unittest import mock as utm
 import threading
 
 from tornado import gen as tg, testing as tt
 
-import wcpan.worker as worker
+import wcpan.worker as ww
 from . import util as u
 
 
@@ -13,7 +13,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
 
     def setUp(self):
         super(TestAsyncWorker, self).setUp()
-        self._worker = worker.AsyncWorker()
+        self._worker = ww.AsyncWorker()
         self._worker.start()
         self.assertTrue(self._worker.is_alive)
 
@@ -26,7 +26,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
     @utm.patch('threading.Condition', autospec=True)
     @utm.patch('threading.Thread', autospec=True)
     def testStartTwice(self, FakeThread, FakeCondition, FakeIOLoop):
-        w = worker.AsyncWorker()
+        w = ww.AsyncWorker()
         w.start()
 
         the_loop = w._loop
@@ -38,7 +38,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
     @utm.patch('threading.Condition', autospec=True)
     @utm.patch('threading.Thread', autospec=True)
     def testStopTwice(self, FakeThread, FakeCondition, FakeIOLoop):
-        w = worker.AsyncWorker()
+        w = ww.AsyncWorker()
         w.start()
         w.stop()
 
@@ -48,122 +48,167 @@ class TestAsyncWorker(tt.AsyncTestCase):
 
     @tt.gen_test
     def testDoWithSync(self):
-        fn = self._createSyncMock()
+        fn = u.NonBlocker()
         rv = yield self._worker.do(fn)
-        fn.assert_called_once_with()
+        self.assertEqual(fn.call_count, 1)
         self.assertEqual(rv, 42)
 
     @tt.gen_test
     def testDoWithAsync(self):
-        fn = self._createAsyncMock()
+        fn = u.AsyncNonBlocker()
         rv = yield self._worker.do(fn)
-        fn.assert_called_once_with()
-        fn.assert_awaited()
+        self.assertEqual(fn.call_count, 1)
         self.assertEqual(rv, 42)
 
     @tt.gen_test
     def testDoLaterWithSync(self):
-        fn = self._createSyncMock()
-        self._worker.do_later(fn)
-        yield tg.sleep(0.5)
-        fn.assert_called_once_with()
+        fn = u.NonBlocker()
+        rc = u.ResultCollector()
+        self._worker.do_later(fn, rc.add)
+        self._worker.do_later(rc)
+        rc.wait()
+        self.assertEqual(fn.call_count, 1)
 
     @tt.gen_test
     def testDoLaterWithAsync(self):
-        fn = self._createAsyncMock()
-        self._worker.do_later(fn)
-        yield tg.sleep(0.5)
-        fn.assert_called_once_with()
+        fn = u.AsyncNonBlocker()
+        rc = u.ResultCollector()
+        self._worker.do_later(fn, rc.add)
+        self._worker.do_later(rc)
+        rc.wait()
+        self.assertEqual(fn.call_count, 1)
 
     @tt.gen_test
     def testDoWithSyncPartial(self):
-        fn = self._createSyncMock()
-        rv = yield self._worker.do(functools.partial(fn, 1, k=7))
-        fn.assert_called_once_with(1, k=7)
+        fn = u.NonBlocker()
+        bound_fn = ft.partial(fn, 1, k=7)
+        rv = yield self._worker.do(bound_fn)
+        self.assertEqual(fn.called_with, [
+            ((1, ), {
+                'k': 7,
+            }),
+        ])
         self.assertEqual(rv, 42)
 
     @tt.gen_test
     def testDoWithAsyncPartial(self):
-        fn = self._createAsyncMock()
-        rv = yield self._worker.do(functools.partial(fn, 1, k=7))
-        fn.assert_called_once_with(1, k=7)
-        fn.assert_awaited()
+        fn = u.AsyncNonBlocker()
+        bound_fn = ft.partial(fn, 1, k=7)
+        rv = yield self._worker.do(bound_fn)
+        self.assertEqual(fn.called_with, [
+            ((1, ), {
+                'k': 7,
+            }),
+        ])
         self.assertEqual(rv, 42)
 
     @tt.gen_test
     def testDoLaterWithSyncPartial(self):
-        fn = self._createSyncMock()
-        self._worker.do_later(functools.partial(fn, 1, k=7))
-        yield tg.sleep(0.5)
-        fn.assert_called_once_with(1, k=7)
+        fn = u.NonBlocker()
+        rc = u.ResultCollector()
+        bound_fn = ft.partial(fn, 1, k=7)
+        self._worker.do_later(bound_fn, rc.add)
+        self._worker.do_later(rc)
+        rc.wait()
+        self.assertEqual(fn.called_with, [
+            ((1, ), {
+                'k': 7,
+            }),
+        ])
 
     @tt.gen_test
     def testDoLaterWithAsyncPartial(self):
-        fn = self._createAsyncMock()
-        self._worker.do_later(functools.partial(fn, 1, k=7))
-        yield tg.sleep(0.5)
-        fn.assert_called_once_with(1, k=7)
-        fn.assert_awaited()
+        fn = u.AsyncNonBlocker()
+        rc = u.ResultCollector()
+        bound_fn = ft.partial(fn, 1, k=7)
+        self._worker.do_later(bound_fn, rc.add)
+        self._worker.do_later(rc)
+        rc.wait()
+        self.assertEqual(fn.called_with, [
+            ((1, ), {
+                'k': 7,
+            }),
+        ])
 
     @tt.gen_test
     def testRunOrder(self):
-        first_task = self._createAsyncMock()
-        side = []
-        second_task = FakeTask(side, 2)
-        third_task = FakeTask(side, 3)
-        self._worker.do_later(first_task)
-        self._worker.do_later(second_task)
-        self._worker.do_later(third_task)
-        yield tg.sleep(0.5)
-        self.assertEqual(side, [third_task, second_task])
+        first_task = u.Blocker(rv=1, p=1)
+        second_task = u.NonBlocker(rv=2, p=2)
+        third_task = u.NonBlocker(rv=3, p=3)
+
+        rc = u.ResultCollector()
+
+        self._worker.do_later(first_task, rc.add)
+        first_task.wait_for_enter()
+        self._worker.do_later(second_task, rc.add)
+        self._worker.do_later(third_task, rc.add)
+        self._worker.do_later(rc)
+        first_task.continue_for_exit()
+
+        rc.wait()
+
+        self.assertEqual(rc.values, [1, 3, 2])
 
     @tt.gen_test
     def testFlush(self):
-        blocker = threading.Event()
+        first_task = u.Blocker(rv=1, p=1)
+        second_task = u.NonBlocker(rv=2, p=2)
+        third_task = u.NonBlocker(rv=3, p=3)
 
-        def first_task():
-            blocker.wait()
+        rc = u.ResultCollector()
 
-        side = []
-        second_task = FakeTask(side, 1)
-
-        self._worker.do_later(first_task)
-        self._worker.do_later(second_task)
+        self._worker.do_later(first_task, rc.add)
+        first_task.wait_for_enter()
+        self._worker.do_later(second_task, rc.add)
+        self._worker.do_later(third_task, rc.add)
 
         q = self._getInternalQueue()
         self.assertEqual(len(q), 2)
 
-        blocker.set()
+        first_task.continue_for_exit()
 
-        # flush tasks
-        yield self._worker.flush(lambda _: _.priority == -2)
+        # flush third_task
+        yield self._worker.flush(lambda _: _.priority == 3)
+
+        self._worker.do_later(rc)
+
+        rc.wait()
+
         q = self._getInternalQueue()
         self.assertEqual(len(q), 0)
-        self.assertEqual(side, [])
+        self.assertEqual(rc.values, [1, 2])
 
     @tt.gen_test
     def testFlushLater(self):
-        first_task = self._createAsyncMock(2)
-        side = []
-        second_task = FakeTask(side, 1)
-        self._worker.do_later(first_task)
-        self._worker.do_later(second_task)
+        first_task = u.Blocker(rv=1, p=1)
+        second_task = u.NonBlocker(rv=2, p=2)
+        third_task = u.NonBlocker(rv=3, p=3)
 
-        # wait until first_task is running
-        yield tg.sleep(0.5)
-        q = self._getInternalQueue()
-        self.assertEqual(len(q), 1)
+        rc = u.ResultCollector()
 
-        # wait until flush task enter the queue
-        self._worker.flush_later(lambda _: _.priority == -2)
-        yield tg.sleep(0.5)
+        self._worker.do_later(first_task, rc.add)
+        first_task.wait_for_enter()
+        self._worker.do_later(second_task, rc.add)
+        self._worker.do_later(third_task, rc.add)
+
         q = self._getInternalQueue()
         self.assertEqual(len(q), 2)
-        self.assertIsNot(q[0].__class__, FakeTask)
 
-        # wait until idle
-        yield tg.sleep(1.5)
-        self.assertEqual(side, [])
+        bk = threading.Event()
+        def on_flushed(rv):
+            bk.set()
+
+        self._worker.flush_later(lambda _: _.priority == 3, on_flushed)
+
+        first_task.continue_for_exit()
+        bk.wait()
+
+        self._worker.do_later(rc)
+        rc.wait()
+
+        q = self._getInternalQueue()
+        self.assertEqual(len(q), 0)
+        self.assertEqual(rc.values, [1, 2])
 
     @tt.gen_test
     def testDoWithException(self):
@@ -173,21 +218,6 @@ class TestAsyncWorker(tt.AsyncTestCase):
         with self.assertRaises(TestException):
             yield self._worker.do(fn)
 
-    @tt.gen_test
-    def testDoLaterWithCallback(self):
-        fn = self._createSyncMock()
-        cb = utm.MagicMock()
-        self._worker.do_later(fn, cb)
-        yield tg.sleep(0.5)
-        fn.assert_called_once_with()
-        cb.assert_called_once_with(42)
-
-    def _createSyncMock(self):
-        return utm.Mock(return_value=42)
-
-    def _createAsyncMock(self, delay=None):
-        return u.AsyncMock(return_value=42, delay=delay)
-
     def _getInternalQueue(self):
         return self._worker._get_internal_queue()
 
@@ -195,39 +225,9 @@ class TestAsyncWorker(tt.AsyncTestCase):
 class TestTask(ut.TestCase):
 
     def testID(self):
-        a = worker.Task()
-        b = worker.Task()
+        a = ww.Task()
+        b = ww.Task()
         self.assertLess(a.id_, b.id_)
-
-
-class FakeTask(worker.Task):
-
-    def __init__(self, side, order):
-        super(FakeTask, self).__init__()
-
-        self._side = side
-        self._order = order
-
-    def __eq__(self, that):
-        return self.priority == that.priority and self._order == that._order
-
-    def __lt__(self, that):
-        if self.priority > that.priority:
-            return True
-        if self.priority < that.priority:
-            return False
-        return self._order > that._order
-
-    def __call__(self):
-        self._side.append(self)
-        return self
-
-    def __await__(self):
-        yield tg.sleep(0.125)
-
-    @property
-    def priority(self):
-        return -2
 
 
 class TestException(Exception):
