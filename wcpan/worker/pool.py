@@ -4,8 +4,9 @@ from typing import Awaitable, Any, Optional
 
 import tornado.ioloop as ti
 import tornado.locks as tl
+from wcpan.logger import EXCEPTION
 
-from .worker import AsyncWorker, MaybeTask, AwaitCallback
+from .worker import AsyncWorker, MaybeTask, AwaitCallback, WorkerError
 
 
 class AsyncWorkerPool(object):
@@ -67,6 +68,11 @@ class AsyncWorkerPool(object):
             worker = self._idle.pop(0)
         elif len(self._busy) < self._max:
             worker = AsyncWorker()
+            try:
+                worker.start()
+            except WorkerError as e:
+                EXCEPTION('wcpan.worker') << 'got currupted worker'
+                return None
         return worker
 
 
