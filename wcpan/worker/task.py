@@ -66,18 +66,13 @@ class InternalTask(Task):
         # if not same type, always non-equal
         if self.__class__ is not that.__class__:
             return False
-        return self.id_ == that.id_
+        return super(InternalTask, self).equal(that)
 
     def higher_then(self, that: Task) -> bool:
         # if not internal task, it has lower priority
         if not isinstance(that, InternalTask):
             return True
-        if self.priority > that.priority:
-            return True
-        if self.priority < that.priority:
-            return False
-        # lower ID was created earlier
-        return self.id_ < that.id_
+        return super(InternalTask, self).higher_then(that)
 
 
 # ATTENTION DO NOT use this class
