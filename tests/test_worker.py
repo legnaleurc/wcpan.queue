@@ -222,13 +222,5 @@ class TestAsyncWorker(tt.AsyncTestCase):
         return self._worker._get_internal_queue()
 
 
-class TestTask(ut.TestCase):
-
-    def testID(self):
-        a = ww.Task()
-        b = ww.Task()
-        self.assertLess(a.id_, b.id_)
-
-
 class TestException(Exception):
     pass
