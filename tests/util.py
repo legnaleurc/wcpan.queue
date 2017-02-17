@@ -1,7 +1,7 @@
 import threading
 from unittest import mock as utm
 
-from tornado import ioloop as ti, gen as tg
+from tornado import ioloop as ti, gen as tg, locks as tl
 
 import wcpan.worker as ww
 
@@ -113,7 +113,7 @@ class ResultCollector(ww.Task):
     def __init__(self):
         super(ResultCollector, self).__init__()
         self._return_values = []
-        self._done = threading.Event()
+        self._done = tl.Event()
 
     @property
     def priority(self):
@@ -125,8 +125,8 @@ class ResultCollector(ww.Task):
     def __call__(self):
         self._done.set()
 
-    def wait(self):
-        self._done.wait()
+    async def wait(self):
+        await self._done.wait()
 
     @property
     def values(self):

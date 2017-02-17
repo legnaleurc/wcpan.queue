@@ -66,7 +66,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         rc = u.ResultCollector()
         self._worker.do_later(fn, rc.add)
         self._worker.do_later(rc)
-        rc.wait()
+        yield rc.wait()
         self.assertEqual(fn.call_count, 1)
 
     @tt.gen_test
@@ -75,7 +75,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         rc = u.ResultCollector()
         self._worker.do_later(fn, rc.add)
         self._worker.do_later(rc)
-        rc.wait()
+        yield rc.wait()
         self.assertEqual(fn.call_count, 1)
 
     @tt.gen_test
@@ -109,7 +109,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         bound_fn = ft.partial(fn, 1, k=7)
         self._worker.do_later(bound_fn, rc.add)
         self._worker.do_later(rc)
-        rc.wait()
+        yield rc.wait()
         self.assertEqual(fn.called_with, [
             ((1, ), {
                 'k': 7,
@@ -123,7 +123,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         bound_fn = ft.partial(fn, 1, k=7)
         self._worker.do_later(bound_fn, rc.add)
         self._worker.do_later(rc)
-        rc.wait()
+        yield rc.wait()
         self.assertEqual(fn.called_with, [
             ((1, ), {
                 'k': 7,
@@ -145,7 +145,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         self._worker.do_later(rc)
         first_task.continue_for_exit()
 
-        rc.wait()
+        yield rc.wait()
 
         self.assertEqual(rc.values, [1, 3, 2])
 
@@ -172,7 +172,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
 
         self._worker.do_later(rc)
 
-        rc.wait()
+        yield rc.wait()
 
         q = self._getInternalQueue()
         self.assertEqual(len(q), 0)
@@ -204,7 +204,7 @@ class TestAsyncWorker(tt.AsyncTestCase):
         bk.wait()
 
         self._worker.do_later(rc)
-        rc.wait()
+        yield rc.wait()
 
         q = self._getInternalQueue()
         self.assertEqual(len(q), 0)

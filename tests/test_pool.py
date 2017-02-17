@@ -4,6 +4,7 @@ from unittest import mock as utm
 from tornado import gen as tg, testing as tt
 
 import wcpan.worker as ww
+from . import util as u
 
 
 class TestAsyncWorkerPool(tt.AsyncTestCase):
@@ -19,17 +20,19 @@ class TestAsyncWorkerPool(tt.AsyncTestCase):
 
     @tt.gen_test
     def testDoWithSync(self):
-        fn = self._createSyncMock()
+        fn = u.NonBlocker()
         rv = yield self._pool.do(fn)
-        fn.assert_called_once_with()
+        self.assertEqual(fn.call_count, 1)
         self.assertEqual(rv, 42)
 
     @tt.gen_test
     def testDoLaterWithSync(self):
-        fn = self._createSyncMock()
+        fn = u.NonBlocker()
+        rc = u.ResultCollector()
         self._pool.do_later(fn)
-        yield tg.sleep(0.5)
-        fn.assert_called_once_with()
+        self._pool.do_later(rc)
+        yield rc.wait()
+        self.assertEqual(fn.call_count, 1)
 
     def _createSyncMock(self):
         return utm.Mock(return_value=42)
