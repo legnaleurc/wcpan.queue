@@ -1,7 +1,6 @@
 import unittest as ut
-from unittest import mock as utm
 
-from tornado import gen as tg, testing as tt
+from tornado import testing as tt
 
 import wcpan.worker as ww
 from . import util as u
@@ -33,6 +32,3 @@ class TestAsyncWorkerPool(tt.AsyncTestCase):
         self._pool.do_later(rc)
         yield rc.wait()
         self.assertEqual(fn.call_count, 1)
-
-    def _createSyncMock(self):
-        return utm.Mock(return_value=42)
