@@ -213,14 +213,10 @@ class TestAsyncWorker(tt.AsyncTestCase):
     @tt.gen_test
     def testDoWithException(self):
         def fn():
-            raise TestException('magic')
+            raise u.DummyException('magic')
 
-        with self.assertRaises(TestException):
+        with self.assertRaises(u.DummyException):
             yield self._worker.do(fn)
 
     def _getInternalQueue(self):
         return self._worker._get_internal_queue()
-
-
-class TestException(Exception):
-    pass

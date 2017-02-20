@@ -6,6 +6,10 @@ from tornado import ioloop as ti, gen as tg, locks as tl
 import wcpan.worker as ww
 
 
+class DummyException(Exception):
+    pass
+
+
 class BackgroundTask(ww.Task):
 
     def __init__(self, rv=None, p=None, *args, **kwargs):
