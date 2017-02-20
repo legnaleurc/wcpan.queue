@@ -16,9 +16,6 @@ class AsyncWorkerPool(object):
         self._max = mp.cpu_count() if workers is None else workers
         self._lock = tl.Condition()
 
-    def start(self) -> None:
-        pass
-
     def stop(self) -> None:
         for worker in self._idle:
             worker.stop()
@@ -26,10 +23,6 @@ class AsyncWorkerPool(object):
         for worker in self._busy:
             worker.stop()
         self._busy = set()
-
-    @property
-    def is_alive(self) -> bool:
-        return True
 
     async def do(self, task: MaybeTask) -> Awaitable[Any]:
         async with WorkerRecycler(self) as worker:
