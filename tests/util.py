@@ -36,10 +36,10 @@ class BackgroundTask(ww.Task):
         return self._priority
 
 
-class AsyncTask(BackgroundTask):
+class AsyncMixin(BackgroundTask):
 
     def __init__(self, *args, **kwargs):
-        super(AsyncTask, self).__init__(*args, **kwargs)
+        super(AsyncMixin, self).__init__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         return self._async(*args, **kwargs)
@@ -48,10 +48,10 @@ class AsyncTask(BackgroundTask):
         return self._call(*args, **kwargs)
 
 
-class SyncTask(BackgroundTask):
+class SyncMixin(BackgroundTask):
 
     def __init__(self, *args, **kwargs):
-        super(SyncTask, self).__init__(*args, **kwargs)
+        super(SyncMixin, self).__init__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
         return self._call(*args, **kwargs)
@@ -88,25 +88,25 @@ class NonBlockerMixin(BackgroundTask):
         pass
 
 
-class AsyncBlocker(AsyncTask, BlockerMixin):
+class AsyncBlocker(AsyncMixin, BlockerMixin):
 
     def __init__(self, *args, **kwargs):
         super(AsyncBlocker, self).__init__(*args, **kwargs)
 
 
-class Blocker(SyncTask, BlockerMixin):
+class Blocker(SyncMixin, BlockerMixin):
 
     def __init__(self, *args, **kwargs):
         super(Blocker, self).__init__(*args, **kwargs)
 
 
-class AsyncNonBlocker(AsyncTask, NonBlockerMixin):
+class AsyncNonBlocker(AsyncMixin, NonBlockerMixin):
 
     def __init__(self, *args, **kwargs):
         super(AsyncNonBlocker, self).__init__(*args, **kwargs)
 
 
-class NonBlocker(SyncTask, NonBlockerMixin):
+class NonBlocker(SyncMixin, NonBlockerMixin):
 
     def __init__(self, *args, **kwargs):
         super(NonBlocker, self).__init__(*args, **kwargs)
