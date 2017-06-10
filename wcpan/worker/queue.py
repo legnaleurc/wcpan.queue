@@ -1,7 +1,8 @@
 import functools as ft
+from typing import Callable
 
 from tornado import queues as tq, locks as tl, ioloop as ti
-from wcpan.logger import EXCEPTION
+from wcpan.logger import DEBUG, EXCEPTION
 
 from .task import regular_call, ensure_task, MaybeTask, TerminalTask
 
@@ -31,6 +32,13 @@ class AsyncQueue(object):
         await self._end.wait()
         self._reset()
 
+    def flush(self, filter_: Callable[['Task'], bool]):
+        q = self._get_internal_queue()
+        nq = filter(lambda _: not filter_(_), q)
+        nq = list(nq)
+        DEBUG('wcpan.worker') << 'flush:' << 'before' << len(q) << 'after' << len(nq)
+        self._set_internal_queue(nq)
+
     def post(self, task: MaybeTask):
         task = ensure_task(task)
         self._queue.put_nowait(task)
@@ -59,3 +67,9 @@ class AsyncQueue(object):
     def _reset(self):
         self._queue = tq.PriorityQueue()
         self._end = None
+
+    def _get_internal_queue(self):
+        return self._queue._queue
+
+    def _set_internal_queue(self, nq):
+        self._queue._queue = nq
