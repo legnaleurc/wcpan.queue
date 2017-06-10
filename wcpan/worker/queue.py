@@ -8,11 +8,11 @@ class AsyncQueue(object):
 
     def __init__(self, maximum=None):
         self._max = 1 if maximum is None else maximum
-        self._queue = tq.PriorityQueue()
         self._lock = tl.Semaphore(self._max)
         self._loop = ti.IOLoop.current()
         self._running = False
-        self._end = tl.Event()
+
+        self._reset()
 
     def start(self):
         if self._running:
@@ -26,6 +26,7 @@ class AsyncQueue(object):
         for i in range(self._max):
             self._queue.put_nowait(task)
         await self._end.wait()
+        self._reset()
 
     def post(self, task: MaybeTask):
         task = ensure_task(task)
@@ -45,3 +46,7 @@ class AsyncQueue(object):
                 finally:
                     self._queue.task_done()
         self._end.set()
+
+    def _reset(self):
+        self._queue = tq.PriorityQueue()
+        self._end = tl.Event()
