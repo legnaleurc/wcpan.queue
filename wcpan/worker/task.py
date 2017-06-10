@@ -19,6 +19,7 @@ class Task(object):
         self._callable = callable_
         # FIXME atomic because GIL
         self._id = next(self._counter)
+        self._canceled = False
 
     def __eq__(self, that: 'Task') -> bool:
         return self.equal(that)
@@ -27,6 +28,8 @@ class Task(object):
         return self.higher_then(that)
 
     def __call__(self) -> Any:
+        if self._canceled:
+            return
         if not self._callable:
             raise NotImplementedError()
         return self._callable()
@@ -39,6 +42,9 @@ class Task(object):
     @property
     def id_(self) -> int:
         return self._id
+
+    def cancel(self):
+        self._canceled = True
 
     def equal(self, that: 'Task') -> bool:
         if not isinstance(that, Task):
@@ -61,6 +67,10 @@ class InternalTask(Task):
 
     def __init__(self, *args, **kwargs) -> None:
         super(InternalTask, self).__init__(*args, **kwargs)
+
+    # internal tasks should not be cancelable
+    def cancel(self):
+        pass
 
     def equal(self, that: Task) -> bool:
         # if not same type, always non-equal
