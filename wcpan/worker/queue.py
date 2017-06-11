@@ -24,8 +24,10 @@ class AsyncQueue(object):
         self._running = True
 
     async def stop(self):
-        task = TerminalTask()
+        if not self._running:
+            return
         self._running = False
+        task = TerminalTask()
         for i in range(self._max):
             self._queue.put_nowait(task)
         self._end = tl.Event()
