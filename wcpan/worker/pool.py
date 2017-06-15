@@ -1,9 +1,11 @@
+import concurrent.futures as cf
 import functools as ft
 import multiprocessing as mp
 from typing import Awaitable, Any, Optional
 
 import tornado.ioloop as ti
 import tornado.locks as tl
+import tornado.platform.asyncio as tpaio
 
 from .worker import AsyncWorker, MaybeTask, AwaitCallback
 
@@ -77,3 +79,20 @@ class WorkerRecycler(object):
 
     async def __aexit__(self, *args, **kwargs) -> Awaitable[None]:
         self._pool._recycle(self._worker)
+
+
+def create_thread_pool():
+    return cf.ThreadPoolExecutor(max_workers=mp.cpu_count())
+
+
+def off_main_thread_method(pool_attr):
+    def off_main_thread(fn):
+        @ft.wraps(fn)
+        def wrapper(self, *args, **kwargs):
+            pool = getattr(self, pool_attr)
+            future = pool.submit(fn, self, *args, **kwargs)
+            # NOTE dirty hack
+            future = tpaio.to_tornado_future(future)
+            return future
+        return wrapper
+    return off_main_thread
