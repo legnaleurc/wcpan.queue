@@ -1,3 +1,4 @@
+import asyncio
 import concurrent.futures as cf
 import functools as ft
 import multiprocessing as mp
@@ -5,7 +6,6 @@ from typing import Awaitable, Any, Optional
 
 import tornado.ioloop as ti
 import tornado.locks as tl
-import tornado.platform.asyncio as tpaio
 
 from .worker import AsyncWorker, MaybeTask, AwaitCallback
 
@@ -89,10 +89,10 @@ def off_main_thread_method(pool_attr):
     def off_main_thread(fn):
         @ft.wraps(fn)
         def wrapper(self, *args, **kwargs):
+            loop = asyncio.get_event_loop()
             pool = getattr(self, pool_attr)
-            future = pool.submit(fn, self, *args, **kwargs)
-            # NOTE dirty hack
-            future = tpaio.to_tornado_future(future)
+            bound_fn = ft.partial(fn, self, *args, **kwargs)
+            future = loop.run_in_executor(pool, bound_fn)
             return future
         return wrapper
     return off_main_thread
