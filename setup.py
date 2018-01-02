@@ -18,7 +18,7 @@ setup(
             'wcpan.worker',
         ],
         install_requires=[
-            'tornado',
+            'tornado >= 5',
             'wcpan.logger',
         ],
         classifiers=[
