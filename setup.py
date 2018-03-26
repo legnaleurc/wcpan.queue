@@ -8,8 +8,8 @@ with open(op.join(op.dirname(__file__), './README.rst')) as fin:
 
 setup(
         name='wcpan.worker',
-        version='1.3.0',
-        description='A multithread worker for Tornado',
+        version='2.0.0.dev1',
+        description='An asynchronous task queue with priority support.',
         long_description=long_description,
         author='Wei-Cheng Pan',
         author_email='legnaleurc@gmail.com',
@@ -18,7 +18,6 @@ setup(
             'wcpan.worker',
         ],
         install_requires=[
-            'tornado >= 5',
             'wcpan.logger',
         ],
         classifiers=[
