@@ -1,7 +1,6 @@
-import functools as ft
+import asyncio
 from typing import Callable
 
-from tornado import queues as tq, locks as tl, ioloop as ti
 from wcpan.logger import DEBUG, EXCEPTION
 
 from .task import regular_call, ensure_task, MaybeTask, TerminalTask
@@ -11,8 +10,8 @@ class AsyncQueue(object):
 
     def __init__(self, maximum=None):
         self._max = 1 if maximum is None else maximum
-        self._lock = tl.Semaphore(self._max)
-        self._loop = ti.IOLoop.current()
+        self._lock = asyncio.Semaphore(self._max)
+        self._loop = asyncio.get_event_loop()
         self._running = False
 
         self._reset()
@@ -20,7 +19,7 @@ class AsyncQueue(object):
     def start(self):
         if self._running:
             return
-        self._loop.add_callback(self._process)
+        self._loop.create_task(self._process())
         self._running = True
 
     async def stop(self):
@@ -30,7 +29,7 @@ class AsyncQueue(object):
         task = TerminalTask()
         for i in range(self._max):
             self._queue.put_nowait(task)
-        self._end = tl.Event()
+        self._end = asyncio.Event()
         await self._end.wait()
         self._reset()
 
@@ -49,8 +48,7 @@ class AsyncQueue(object):
         while self._running:
             await self._lock.acquire()
             task = await self._queue.get()
-            fn = ft.partial(self._run, task)
-            self._loop.add_callback(fn)
+            self._loop.create_task(self._run(task))
 
     async def _run(self, task):
         try:
@@ -67,7 +65,7 @@ class AsyncQueue(object):
                 self._end.set()
 
     def _reset(self):
-        self._queue = tq.PriorityQueue()
+        self._queue = asyncio.PriorityQueue()
         self._end = None
 
     def _get_internal_queue(self):

@@ -1,7 +1,6 @@
+import asyncio
 import threading
 from unittest import mock as utm
-
-from tornado import ioloop as ti, gen as tg, locks as tl
 
 import wcpan.worker as ww
 
@@ -42,10 +41,9 @@ class AsyncMixin(BackgroundTask):
         super(AsyncMixin, self).__init__(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
-        return self._async(*args, **kwargs)
-
-    async def _async(self, *args, **kwargs):
-        return self._call(*args, **kwargs)
+        f = asyncio.create_future()
+        f.set_result(self._call(*args, **kwargs))
+        return f
 
 
 class SyncMixin(BackgroundTask):
@@ -117,7 +115,7 @@ class ResultCollector(ww.Task):
     def __init__(self):
         super(ResultCollector, self).__init__()
         self._return_values = []
-        self._done = tl.Event()
+        self._done = asyncio.Event()
 
     @property
     def priority(self):
@@ -135,3 +133,8 @@ class ResultCollector(ww.Task):
     @property
     def values(self):
         return self._return_values
+
+
+def await_(awaitable):
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(awaitable)
