@@ -1,2 +1,1 @@
-tornado >= 5
 wcpan.logger
