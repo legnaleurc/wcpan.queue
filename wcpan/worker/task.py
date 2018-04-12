@@ -11,14 +11,14 @@ MaybeTask = Union['Task', RawTask]
 @functools.total_ordering
 class Task(object):
 
-    _counter = itertools.count()
+    __counter = itertools.count()
 
     def __init__(self, callable_: RawTask = None) -> None:
         super(Task, self).__init__()
 
-        self._callable = callable_
+        self.__callable = callable_
         # FIXME atomic because GIL
-        self._id = next(self._counter)
+        self.__id = next(self.__counter)
 
     def __eq__(self, that: 'Task') -> bool:
         return self.equal(that)
@@ -27,9 +27,9 @@ class Task(object):
         return self.higher_then(that)
 
     def __call__(self) -> Any:
-        if not self._callable:
+        if not self.__callable:
             raise NotImplementedError()
-        return self._callable()
+        return self.__callable()
 
     # highest first
     @property
@@ -38,7 +38,7 @@ class Task(object):
 
     @property
     def id_(self) -> int:
-        return self._id
+        return self.__id
 
     def equal(self, that: 'Task') -> bool:
         if not isinstance(that, Task):
@@ -82,7 +82,7 @@ class FlushTask(InternalTask):
         super(FlushTask, self).__init__(callable_=filter_)
 
     def __call__(self, task: Task) -> bool:
-        return self._callable(task)
+        return self.__callable(task)
 
     @property
     def priority(self) -> int:
