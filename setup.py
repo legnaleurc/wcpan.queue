@@ -17,8 +17,9 @@ setup(
         packages=[
             'wcpan.worker',
         ],
+        python_requires='>= 3.6',
         install_requires=[
-            'wcpan.logger',
+            'wcpan.logger ~= 1.0.0',
         ],
         classifiers=[
             'Programming Language :: Python :: 3 :: Only',
