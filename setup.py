@@ -19,7 +19,7 @@ setup(
         ],
         python_requires='>= 3.6',
         install_requires=[
-            'wcpan.logger ~= 1.0.0',
+            'wcpan.logger ~= 1.2.3',
         ],
         classifiers=[
             'Programming Language :: Python :: 3 :: Only',
