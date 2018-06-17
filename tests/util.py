@@ -133,8 +133,3 @@ class ResultCollector(ww.Task):
     @property
     def values(self):
         return self._return_values
-
-
-def await_(awaitable):
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(awaitable)

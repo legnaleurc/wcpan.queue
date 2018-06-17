@@ -8,7 +8,8 @@ from . import util as u
 
 class TestAsyncQueue(ut.TestCase):
 
-    def testPost(self):
+    @ww.sync
+    async def testPost(self):
         self._queue = ww.AsyncQueue()
         self._queue.start()
 
@@ -17,12 +18,13 @@ class TestAsyncQueue(ut.TestCase):
 
         self._queue.post(fn)
         self._queue.post(rc)
-        u.await_(rc.wait())
-        u.await_(self._queue.stop())
+        await rc.wait()
+        await self._queue.stop()
 
         self.assertEqual(fn.call_count, 1)
 
-    def testPostParallel(self):
+    @ww.sync
+    async def testPostParallel(self):
         self._queue = ww.AsyncQueue(2)
         self._queue.start()
 
@@ -36,15 +38,16 @@ class TestAsyncQueue(ut.TestCase):
 
         before = time.perf_counter()
         self._queue.post(rc)
-        u.await_(rc.wait())
+        await rc.wait()
         after = time.perf_counter()
         diff = after - before
-        u.await_(self._queue.stop())
+        await self._queue.stop()
 
         self.assertLess(diff, 0.3)
         self.assertEqual(rc.values, [42, 42])
 
-    def testFlush(self):
+    @ww.sync
+    async def testFlush(self):
         self._queue = ww.AsyncQueue()
         self._queue.start()
 
@@ -59,8 +62,8 @@ class TestAsyncQueue(ut.TestCase):
 
         self._queue.post(rc)
 
-        u.await_(rc.wait())
-        u.await_(self._queue.stop())
+        await rc.wait()
+        await self._queue.stop()
 
         self.assertEqual(fn1.call_count, 0)
         self.assertEqual(fn2.call_count, 1)
