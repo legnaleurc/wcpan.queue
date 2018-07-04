@@ -4,7 +4,7 @@ from typing import Callable
 
 from wcpan.logger import DEBUG, EXCEPTION
 
-from .task import regular_call, ensure_task, MaybeTask, TerminalTask
+from .task import regular_call, ensure_task, MaybeTask
 
 
 class AsyncQueue(object):

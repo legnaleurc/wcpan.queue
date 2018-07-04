@@ -56,50 +56,6 @@ class Task(object):
         return self.id_ < that.id_
 
 
-# ATTENTION DO NOT use this class
-class InternalTask(Task):
-
-    def __init__(self, *args, **kwargs) -> None:
-        super(InternalTask, self).__init__(*args, **kwargs)
-
-    def equal(self, that: Task) -> bool:
-        # if not same type, always non-equal
-        if self.__class__ is not that.__class__:
-            return False
-        return super(InternalTask, self).equal(that)
-
-    def higher_then(self, that: Task) -> bool:
-        # if not internal task, it has lower priority
-        if not isinstance(that, InternalTask):
-            return True
-        return super(InternalTask, self).higher_then(that)
-
-
-# ATTENTION DO NOT use this class
-class FlushTask(InternalTask):
-
-    def __init__(self, filter_: Callable[[Task], bool]) -> None:
-        super(FlushTask, self).__init__(callable_=filter_)
-
-    def __call__(self, task: Task) -> bool:
-        return self.__callable(task)
-
-    @property
-    def priority(self) -> int:
-        return 1
-
-
-# ATTENTION DO NOT use this class
-class TerminalTask(InternalTask):
-
-    def __init__(self) -> None:
-        super(TerminalTask, self).__init__()
-
-    @property
-    def priority(self) -> int:
-        return 2
-
-
 def ensure_task(maybe_task: MaybeTask) -> Task:
     if not isinstance(maybe_task, Task):
         maybe_task = Task(maybe_task)
