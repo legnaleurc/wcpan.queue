@@ -19,6 +19,7 @@ setup(
         ],
         python_requires='>= 3.6',
         install_requires=[
+            'async-timeout ~= 3.0.0',
             'wcpan.logger ~= 1.2.3',
         ],
         classifiers=[
