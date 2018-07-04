@@ -12,25 +12,21 @@ class AsyncQueue(object):
         self._max = 1 if maximum is None else maximum
         self._lock = asyncio.Semaphore(self._max)
         self._loop = asyncio.get_event_loop()
-        self._running = False
-
         self._reset()
 
     def start(self):
-        if self._running:
+        if self._runner or self._stopper:
             return
-        self._loop.create_task(self._process())
-        self._running = True
+        self._runner = self._loop.create_task(self._process())
 
     async def stop(self):
-        if not self._running:
+        if not self._runner or self._stopper:
             return
-        self._running = False
         task = TerminalTask()
-        for i in range(self._max):
-            self._queue.put_nowait(task)
-        self._end = asyncio.Event()
-        await self._end.wait()
+        self._queue.put_nowait(task)
+        self._stopper = asyncio.Event()
+        await self._stopper.wait()
+        self._runner.cancel()
         self._reset()
 
     def flush(self, filter_: Callable[['Task'], bool]):
@@ -45,7 +41,7 @@ class AsyncQueue(object):
         self._queue.put_nowait(task)
 
     async def _process(self):
-        while self._running:
+        while self._runner:
             await self._lock.acquire()
             task = await self._queue.get()
             self._loop.create_task(self._run(task))
@@ -61,12 +57,13 @@ class AsyncQueue(object):
         finally:
             self._queue.task_done()
             self._lock.release()
-            if self._end and self._lock._value == self._max:
-                self._end.set()
+            if self._stopper:
+                self._stopper.set()
 
     def _reset(self):
         self._queue = asyncio.PriorityQueue()
-        self._end = None
+        self._stopper = None
+        self._runner = None
 
     def _get_internal_queue(self):
         return self._queue._queue
