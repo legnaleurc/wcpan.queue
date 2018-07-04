@@ -2,11 +2,20 @@ import asyncio
 import time
 import unittest as ut
 
+import async_timeout as at
+
 import wcpan.worker as ww
 from . import util as u
 
 
 class TestAsyncQueue(ut.TestCase):
+
+    @ww.sync
+    async def testImmediatelyShutdown(self):
+        with at.timeout(0.1):
+            self._queue = ww.AsyncQueue(8)
+            self._queue.start()
+            await self._queue.stop()
 
     @ww.sync
     async def testPost(self):
