@@ -13,6 +13,13 @@ class AsyncQueue(object):
         self._max = 1 if maximum is None else maximum
         self._reset()
 
+    async def __aenter__(self):
+        self.start()
+        return self
+
+    async def __aexit__(self, type_, exc, tb):
+        await self.stop()
+
     def start(self):
         if self._consumer_list:
             return
