@@ -45,6 +45,7 @@ class AsyncQueue(object):
         # cancel all consumers
         for consumer in self._consumer_list:
             consumer.cancel()
+        await asyncio.wait(self._consumer_list)
 
         self._reset()
 
