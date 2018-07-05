@@ -1,5 +1,4 @@
 import asyncio
-import time
 import unittest as ut
 
 import async_timeout as at
@@ -39,13 +38,10 @@ class TestAsyncQueue(ut.TestCase):
             aq.post(wait_one_second)
             aq.post(wait_one_second)
 
-            before = time.perf_counter()
-            aq.post(rc)
-            await rc.wait()
-            after = time.perf_counter()
-            diff = after - before
+            with at.timeout(0.3):
+                aq.post(rc)
+                await rc.wait()
 
-        self.assertLess(diff, 0.3)
         self.assertEqual(rc.values, [42, 42])
 
     @ww.sync
