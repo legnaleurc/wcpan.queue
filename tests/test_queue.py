@@ -13,66 +13,56 @@ class TestAsyncQueue(ut.TestCase):
     @ww.sync
     async def testImmediatelyShutdown(self):
         with at.timeout(0.1):
-            self._queue = ww.AsyncQueue(8)
-            self._queue.start()
-            await self._queue.stop()
+            async with ww.AsyncQueue(8) as aq:
+                pass
 
     @ww.sync
     async def testPost(self):
-        self._queue = ww.AsyncQueue()
-        self._queue.start()
+        async with ww.AsyncQueue() as aq:
+            fn = u.NonBlocker()
+            rc = u.ResultCollector()
 
-        fn = u.NonBlocker()
-        rc = u.ResultCollector()
-
-        self._queue.post(fn)
-        self._queue.post(rc)
-        await rc.wait()
-        await self._queue.stop()
+            aq.post(fn)
+            aq.post(rc)
+            await rc.wait()
 
         self.assertEqual(fn.call_count, 1)
 
     @ww.sync
     async def testPostParallel(self):
-        self._queue = ww.AsyncQueue(2)
-        self._queue.start()
+        async with ww.AsyncQueue(2) as aq:
+            rc = u.ResultCollector()
+            async def wait_one_second():
+                await asyncio.sleep(0.25)
+                rc.add(42)
 
-        rc = u.ResultCollector()
-        async def wait_one_second():
-            await asyncio.sleep(0.25)
-            rc.add(42)
+            aq.post(wait_one_second)
+            aq.post(wait_one_second)
 
-        self._queue.post(wait_one_second)
-        self._queue.post(wait_one_second)
-
-        before = time.perf_counter()
-        self._queue.post(rc)
-        await rc.wait()
-        after = time.perf_counter()
-        diff = after - before
-        await self._queue.stop()
+            before = time.perf_counter()
+            aq.post(rc)
+            await rc.wait()
+            after = time.perf_counter()
+            diff = after - before
 
         self.assertLess(diff, 0.3)
         self.assertEqual(rc.values, [42, 42])
 
     @ww.sync
     async def testFlush(self):
-        self._queue = ww.AsyncQueue()
-        self._queue.start()
+        async with ww.AsyncQueue() as aq:
+            fn1 = u.NonBlocker(p=2)
+            fn2 = u.NonBlocker(p=1)
+            rc = u.ResultCollector()
 
-        fn1 = u.NonBlocker(p=2)
-        fn2 = u.NonBlocker(p=1)
-        rc = u.ResultCollector()
+            aq.post(fn1)
+            aq.post(fn2)
 
-        self._queue.post(fn1)
-        self._queue.post(fn2)
+            aq.flush(lambda t: t.priority == 2)
 
-        self._queue.flush(lambda t: t.priority == 2)
+            aq.post(rc)
 
-        self._queue.post(rc)
-
-        await rc.wait()
-        await self._queue.stop()
+            await rc.wait()
 
         self.assertEqual(fn1.call_count, 0)
         self.assertEqual(fn2.call_count, 1)
