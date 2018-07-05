@@ -8,7 +8,7 @@ with open(op.join(op.dirname(__file__), './README.rst')) as fin:
 
 setup(
         name='wcpan.worker',
-        version='3.1.0',
+        version='3.1.1',
         description='An asynchronous task queue with priority support.',
         long_description=long_description,
         author='Wei-Cheng Pan',
