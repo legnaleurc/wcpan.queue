@@ -17,12 +17,12 @@ setup(
         packages=[
             'wcpan.worker',
         ],
-        python_requires='>= 3.6',
+        python_requires='>= 3.7',
         install_requires=[
             'async-timeout ~= 3.0.0',
             'wcpan.logger ~= 1.2.3',
         ],
         classifiers=[
             'Programming Language :: Python :: 3 :: Only',
-            'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
         ])
