@@ -1,5 +1,6 @@
 import asyncio
 import contextlib as cl
+import multiprocessing as mp
 from typing import Callable
 
 from wcpan.logger import DEBUG, EXCEPTION
@@ -10,7 +11,7 @@ from .task import regular_call, ensure_task, MaybeTask
 class AsyncQueue(object):
 
     def __init__(self, maximum=None):
-        self._max = 1 if maximum is None else maximum
+        self._max = mp.cpu_count() if maximum is None else maximum
         self._reset()
 
     async def __aenter__(self):
