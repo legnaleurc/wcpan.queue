@@ -15,23 +15,12 @@ class AsyncQueue(object):
         self._reset()
 
     async def __aenter__(self):
-        self.start()
         return self
 
     async def __aexit__(self, type_, exc, tb):
-        await self.stop()
+        await self.shutdown()
 
-    def start(self):
-        if self._consumer_list:
-            return
-
-        loop = asyncio.get_event_loop()
-        self._consumer_list = [
-            loop.create_task(self._consume())
-                for _ in range(self._max)
-        ]
-
-    async def stop(self):
+    async def shutdown(self):
         if not self._consumer_list or self._waiting_finish:
             return
 
@@ -60,7 +49,7 @@ class AsyncQueue(object):
         if self._waiting_finish:
             return
 
-        self.start()
+        self._start()
 
         task = ensure_task(task)
         self._queue.put_nowait(task)
@@ -68,6 +57,16 @@ class AsyncQueue(object):
     @property
     def idle(self):
         return self._active_count == 0
+
+    def _start(self):
+        if self._consumer_list:
+            return
+
+        loop = asyncio.get_event_loop()
+        self._consumer_list = [
+            loop.create_task(self._consume())
+                for _ in range(self._max)
+        ]
 
     async def _consume(self):
         while True:
