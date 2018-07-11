@@ -17,7 +17,7 @@ class TestAsyncQueue(ut.TestCase):
 
     @ww.sync
     async def testPost(self):
-        async with ww.AsyncQueue() as aq:
+        async with ww.AsyncQueue(1) as aq:
             fn = u.NonBlocker()
             rc = u.ResultCollector()
 
@@ -46,7 +46,7 @@ class TestAsyncQueue(ut.TestCase):
 
     @ww.sync
     async def testFlush(self):
-        async with ww.AsyncQueue() as aq:
+        async with ww.AsyncQueue(1) as aq:
             fn1 = u.NonBlocker(p=2)
             fn2 = u.NonBlocker(p=1)
             rc = u.ResultCollector()
