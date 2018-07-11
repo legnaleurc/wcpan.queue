@@ -24,9 +24,6 @@ class AsyncQueue(object):
         if not self._consumer_list or self._waiting_finish:
             return
 
-        # if all consumers are busy, we need to flush all pending tasks
-        self._set_internal_queue([])
-
         # if some consumers are busy, we need to wait for running tasks
         if not self.idle:
             self._waiting_finish = asyncio.Event()
