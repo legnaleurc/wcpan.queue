@@ -12,6 +12,7 @@ class AsyncQueue(object):
 
     def __init__(self, maximum=None):
         self._max = mp.cpu_count() if maximum is None else maximum
+        self._waiting_idle = asyncio.Condition()
         self._reset()
 
     async def __aenter__(self):
@@ -20,14 +21,21 @@ class AsyncQueue(object):
     async def __aexit__(self, type_, exc, tb):
         await self.shutdown()
 
+    async def join(self):
+        if self.idle:
+            return
+        async with self._waiting_idle:
+            await self._waiting_idle.wait()
+
     async def shutdown(self):
-        if not self._consumer_list or self._waiting_finish:
+        # no consumer means it never used
+        if not self._consumer_list or self._shutting_down:
             return
 
+        self._shutting_down = True
+
         # if some consumers are busy, we need to wait for running tasks
-        if not self.idle:
-            self._waiting_finish = asyncio.Event()
-            await self._waiting_finish.wait()
+        await self.join()
 
         # cancel all consumers
         for consumer in self._consumer_list:
@@ -46,7 +54,7 @@ class AsyncQueue(object):
         self._set_internal_queue(nq)
 
     def post(self, task: MaybeTask):
-        if self._waiting_finish:
+        if self._shutting_down:
             return
 
         self._start()
@@ -56,7 +64,8 @@ class AsyncQueue(object):
 
     @property
     def idle(self):
-        return self._active_count == 0
+        q = self._get_internal_queue()
+        return not q and self._active_count == 0
 
     def _start(self):
         if self._consumer_list:
@@ -77,13 +86,14 @@ class AsyncQueue(object):
                 except Exception as e:
                     EXCEPTION('wcpan.worker', e) << 'uncaught exception'
 
-            if self._waiting_finish and self.idle:
-                self._waiting_finish.set()
+            async with self._waiting_idle:
+                if self.idle:
+                    self._waiting_idle.notify_all()
 
     def _reset(self):
         self._queue = asyncio.PriorityQueue()
         self._active_count = 0
-        self._waiting_finish = None
+        self._shutting_down = False
         self._consumer_list = None
 
     def _get_internal_queue(self):
