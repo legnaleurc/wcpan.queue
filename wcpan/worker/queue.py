@@ -39,9 +39,12 @@ class AsyncQueue(object):
 
         self._reset()
 
-    def flush(self, filter_: Callable[['Task'], bool]):
+    def flush(self, filter_: Callable[['Task'], bool] = None):
         q = self._get_internal_queue()
-        nq = [_ for _ in q if not filter_(_)]
+        if filter_ is not None:
+            nq = [_ for _ in q if not filter_(_)]
+        else:
+            nq = []
         DEBUG('wcpan.worker') << 'flush:' << 'before' << len(q) << 'after' << len(nq)
         self._set_internal_queue(nq)
 
