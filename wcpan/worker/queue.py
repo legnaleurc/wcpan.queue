@@ -71,7 +71,7 @@ class AsyncQueue(object):
         if self._consumer_list:
             return
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._consumer_list = [
             loop.create_task(self._consume())
                 for _ in range(self._max)
