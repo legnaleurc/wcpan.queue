@@ -1,11 +1,11 @@
-import unittest as ut
+import unittest
 
-import wcpan.worker as ww
+from wcpan.worker import Task
 
 
-class TestTask(ut.TestCase):
+class TestTask(unittest.TestCase):
 
     def testID(self):
-        a = ww.Task()
-        b = ww.Task()
+        a = Task()
+        b = Task()
         self.assertLess(a.id_, b.id_)

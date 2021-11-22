@@ -1,25 +1,23 @@
 import asyncio
-import unittest as ut
+import unittest
 
-import async_timeout as at
+import async_timeout
 
-import wcpan.worker as ww
-from . import util as u
+from wcpan.worker import AsyncQueue
+from .util import NonBlocker, ResultCollector
 
 
-class TestAsyncQueue(ut.TestCase):
+class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
 
-    @ww.sync
     async def testImmediatelyShutdown(self):
-        with at.timeout(0.1):
-            async with ww.AsyncQueue(8) as aq:
+        async with async_timeout.timeout(0.1):
+            async with AsyncQueue(8) as aq:
                 pass
 
-    @ww.sync
     async def testPost(self):
-        async with ww.AsyncQueue(1) as aq:
-            fn = u.NonBlocker()
-            rc = u.ResultCollector()
+        async with AsyncQueue(1) as aq:
+            fn = NonBlocker()
+            rc = ResultCollector()
 
             aq.post(fn)
             aq.post(rc)
@@ -27,10 +25,9 @@ class TestAsyncQueue(ut.TestCase):
 
         self.assertEqual(fn.call_count, 1)
 
-    @ww.sync
     async def testPostParallel(self):
-        async with ww.AsyncQueue(2) as aq:
-            rc = u.ResultCollector()
+        async with AsyncQueue(2) as aq:
+            rc = ResultCollector()
             async def wait_one_second():
                 await asyncio.sleep(0.25)
                 rc.add(42)
@@ -38,18 +35,17 @@ class TestAsyncQueue(ut.TestCase):
             aq.post(wait_one_second)
             aq.post(wait_one_second)
 
-            with at.timeout(0.3):
+            async with async_timeout.timeout(0.3):
                 aq.post(rc)
                 await rc.wait()
 
         self.assertEqual(rc.values, [42, 42])
 
-    @ww.sync
     async def testFlush(self):
-        async with ww.AsyncQueue(1) as aq:
-            fn1 = u.NonBlocker(p=2)
-            fn2 = u.NonBlocker(p=1)
-            rc = u.ResultCollector()
+        async with AsyncQueue(1) as aq:
+            fn1 = NonBlocker(p=2)
+            fn2 = NonBlocker(p=1)
+            rc = ResultCollector()
 
             aq.post(fn1)
             aq.post(fn2)
