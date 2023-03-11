@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wcpan-worker"
-version = "5.0.0"
+version = "6.0.0"
 description = "An asynchronous task queue with priority support."
 authors = ["Wei-Cheng Pan <legnaleurc@gmail.com>"]
 license = "MIT"
