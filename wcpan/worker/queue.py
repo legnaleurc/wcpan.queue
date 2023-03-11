@@ -1,17 +1,23 @@
 import asyncio
-import contextlib as cl
-import multiprocessing as mp
+from contextlib import asynccontextmanager
+from logging import getLogger
+from os import cpu_count
 from typing import Callable
-
-from wcpan.logger import DEBUG, EXCEPTION
 
 from .task import regular_call, ensure_task, MaybeTask
 
 
-class AsyncQueue(object):
+class AsyncQueue:
 
-    def __init__(self, maximum=None):
-        self._max = mp.cpu_count() if maximum is None else maximum
+    def __init__(self, maximum: int | None = None):
+        if maximum is not None:
+            self._max = maximum
+        else:
+            cpu = cpu_count()
+            if not cpu:
+                self._max = 1
+            else:
+                self._max = cpu
         self._waiting_idle = asyncio.Condition()
         self._reset()
 
@@ -50,7 +56,7 @@ class AsyncQueue(object):
             nq = [_ for _ in q if not filter_(_)]
         else:
             nq = []
-        DEBUG('wcpan.worker') << 'flush:' << 'before' << len(q) << 'after' << len(nq)
+        getLogger(__name__).debug(f'flush: before {len(q)} after {len(nq)}')
         self._set_internal_queue(nq)
 
     def post(self, task: MaybeTask):
@@ -83,8 +89,8 @@ class AsyncQueue(object):
                        self._active_guard():
                 try:
                     await regular_call(task)
-                except Exception as e:
-                    EXCEPTION('wcpan.worker', e) << 'uncaught exception'
+                except Exception:
+                    getLogger(__name__).exception('uncaught exception')
 
             async with self._waiting_idle:
                 if self.idle:
@@ -102,7 +108,7 @@ class AsyncQueue(object):
     def _set_internal_queue(self, nq):
         self._queue._queue = nq
 
-    @cl.asynccontextmanager
+    @asynccontextmanager
     async def _active_guard(self):
         self._active_count += 1
         try:
@@ -110,7 +116,7 @@ class AsyncQueue(object):
         finally:
             self._active_count -= 1
 
-    @cl.asynccontextmanager
+    @asynccontextmanager
     async def _pop_task(self):
         task = await self._queue.get()
         try:
