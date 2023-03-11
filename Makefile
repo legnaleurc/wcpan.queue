@@ -1,16 +1,44 @@
-.PHONY: all clean upload test install
+RM := rm -rf
+PYTHON := poetry run -- python3
+BLACK := poetry run -- black
 
-all:
-	python setup.py sdist bdist_wheel
+PKG_FILES := pyproject.toml
+PKG_LOCK := poetry.lock
+ENV_DIR := .venv
+ENV_LOCK := $(ENV_DIR)/pyvenv.cfg
 
-upload: clean all
-	twine upload ./dist/*
+.PHONY: all format lint clean purge test build publish venv
+
+all: venv
+
+format: venv
+	$(BLACK) tests wcpan
+
+lint: venv
+	$(BLACK) --check tests wcpan
 
 clean:
-	rm -rf ./dist ./build ./*.egg-info
+	$(RM) ./dist ./build ./*.egg-info
 
-test:
-	python -m unittest
+purge: clean
+	$(RM) -rf $(ENV_DIR)
 
-install:
-	pip install -e .
+test: venv
+	$(PYTHON) -m compileall wcpan
+	$(PYTHON) -m unittest
+
+build: clean venv
+	poetry build
+
+publish: venv
+	poetry publish
+
+venv: $(ENV_LOCK)
+
+$(ENV_LOCK): $(PKG_LOCK)
+	poetry install
+	touch $@
+
+$(PKG_LOCK): $(PKG_FILES)
+	poetry lock
+	touch $@
