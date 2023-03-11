@@ -8,7 +8,6 @@ from .task import regular_call, ensure_task, MaybeTask
 
 
 class AsyncQueue:
-
     def __init__(self, maximum: int | None = None):
         if maximum is not None:
             self._max = maximum
@@ -50,13 +49,13 @@ class AsyncQueue:
 
         self._reset()
 
-    def flush(self, filter_: Callable[['Task'], bool] = None):
+    def flush(self, filter_: Callable[["Task"], bool] = None):
         q = self._get_internal_queue()
         if filter_ is not None:
             nq = [_ for _ in q if not filter_(_)]
         else:
             nq = []
-        getLogger(__name__).debug(f'flush: before {len(q)} after {len(nq)}')
+        getLogger(__name__).debug(f"flush: before {len(q)} after {len(nq)}")
         self._set_internal_queue(nq)
 
     def post(self, task: MaybeTask):
@@ -79,18 +78,16 @@ class AsyncQueue:
 
         loop = asyncio.get_running_loop()
         self._consumer_list = [
-            loop.create_task(self._consume())
-                for _ in range(self._max)
+            loop.create_task(self._consume()) for _ in range(self._max)
         ]
 
     async def _consume(self):
         while True:
-            async with self._pop_task() as task, \
-                       self._active_guard():
+            async with self._pop_task() as task, self._active_guard():
                 try:
                     await regular_call(task)
                 except Exception:
-                    getLogger(__name__).exception('uncaught exception')
+                    getLogger(__name__).exception("uncaught exception")
 
             async with self._waiting_idle:
                 if self.idle:

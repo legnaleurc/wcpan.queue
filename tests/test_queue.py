@@ -8,7 +8,6 @@ from .util import NonBlocker, ResultCollector
 
 
 class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
-
     async def testImmediatelyShutdown(self):
         async with async_timeout.timeout(0.1):
             async with AsyncQueue(8) as aq:
@@ -28,6 +27,7 @@ class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
     async def testPostParallel(self):
         async with AsyncQueue(2) as aq:
             rc = ResultCollector()
+
             async def wait_one_second():
                 await asyncio.sleep(0.25)
                 rc.add(42)

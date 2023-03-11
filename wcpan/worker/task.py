@@ -5,12 +5,11 @@ from typing import Any, Awaitable, Callable, Union
 
 
 RawTask = Callable[[], Any]
-MaybeTask = Union['Task', RawTask]
+MaybeTask = Union["Task", RawTask]
 
 
 @functools.total_ordering
 class Task(object):
-
     __counter = itertools.count()
 
     def __init__(self, callable_: RawTask = None) -> None:
@@ -20,10 +19,10 @@ class Task(object):
         # FIXME atomic because GIL
         self.__id = next(self.__counter)
 
-    def __eq__(self, that: 'Task') -> bool:
+    def __eq__(self, that: "Task") -> bool:
         return self.equal(that)
 
-    def __lt__(self, that: 'Task') -> bool:
+    def __lt__(self, that: "Task") -> bool:
         return self.higher_then(that)
 
     def __call__(self) -> Any:
@@ -40,12 +39,12 @@ class Task(object):
     def id_(self) -> int:
         return self.__id
 
-    def equal(self, that: 'Task') -> bool:
+    def equal(self, that: "Task") -> bool:
         if not isinstance(that, Task):
             return NotImplemented
         return self.id_ == that.id_
 
-    def higher_then(self, that: 'Task') -> bool:
+    def higher_then(self, that: "Task") -> bool:
         if not isinstance(that, Task):
             return NotImplemented
         if self.priority > that.priority:

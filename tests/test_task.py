@@ -4,7 +4,6 @@ from wcpan.worker import Task
 
 
 class TestTask(unittest.TestCase):
-
     def testID(self):
         a = Task()
         b = Task()
