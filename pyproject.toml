@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "wcpan-worker"
+version = "5.0.0"
+description = "An asynchronous task queue with priority support."
+authors = ["Wei-Cheng Pan <legnaleurc@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/legnaleurc/wcpan.worker"
+packages = [{include = "wcpan"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.1.0"
+async-timeout = "^4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

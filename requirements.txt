@@ -1,3 +1,0 @@
-wcpan.logger ~= 1.2
-# dev only
-async-timeout ~= 4.0
