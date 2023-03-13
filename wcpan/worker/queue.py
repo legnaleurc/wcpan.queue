@@ -1,122 +1,89 @@
-import asyncio
-from contextlib import asynccontextmanager
-from logging import getLogger
-from os import cpu_count
-from typing import Callable
-
-from .task import regular_call, ensure_task, MaybeTask
+from asyncio import LifoQueue, PriorityQueue, Queue, Task, TaskGroup
+from typing import Coroutine, Self, TypeAlias
 
 
-class AsyncQueue:
-    def __init__(self, maximum: int | None = None):
-        if maximum is not None:
-            self._max = maximum
-        else:
-            cpu = cpu_count()
-            if not cpu:
-                self._max = 1
-            else:
-                self._max = cpu
-        self._waiting_idle = asyncio.Condition()
-        self._reset()
+Runnable: TypeAlias = Coroutine[None, None, None]
+_SortableRunnable: TypeAlias = tuple[int, int, Runnable]
+_Queue: TypeAlias = Queue[_SortableRunnable]
 
-    async def __aenter__(self):
-        return self
 
-    async def __aexit__(self, type_, exc, tb):
-        await self.shutdown()
+class AioQueue:
+    @classmethod
+    def fifo(cls, maxsize: int = 0) -> Self:
+        return AioQueue(Queue(maxsize))
 
-    async def join(self):
-        if self.idle:
-            return
-        async with self._waiting_idle:
-            await self._waiting_idle.wait()
+    @classmethod
+    def priority(cls, maxsize: int = 0) -> Self:
+        return AioQueue(PriorityQueue(maxsize))
 
-    async def shutdown(self):
-        # no consumer means it never used
-        if not self._consumer_list or self._shutting_down:
-            return
+    @classmethod
+    def lifo(cls, maxsize: int = 0) -> Self:
+        return AioQueue(LifoQueue(maxsize))
 
-        self._shutting_down = True
-
-        # if some consumers are busy, we need to wait for running tasks
-        await self.join()
-
-        # cancel all consumers
-        for consumer in self._consumer_list:
-            consumer.cancel()
-        await asyncio.wait(self._consumer_list)
-
-        self._reset()
-
-    def flush(self, filter_: Callable[["Task"], bool] = None):
-        q = self._get_internal_queue()
-        if filter_ is not None:
-            nq = [_ for _ in q if not filter_(_)]
-        else:
-            nq = []
-        getLogger(__name__).debug(f"flush: before {len(q)} after {len(nq)}")
-        self._set_internal_queue(nq)
-
-    def post(self, task: MaybeTask):
-        if self._shutting_down:
-            return
-
-        self._start()
-
-        task = ensure_task(task)
-        self._queue.put_nowait(task)
+    def __init__(self, queue: _Queue) -> None:
+        self._id = 0
+        self._queue = queue
 
     @property
-    def idle(self):
-        q = self._get_internal_queue()
-        return not q and self._active_count == 0
+    def maxsize(self) -> int:
+        return self._queue.maxsize
 
-    def _start(self):
-        if self._consumer_list:
-            return
+    @property
+    def size(self) -> int:
+        return self._queue.qsize()
 
-        loop = asyncio.get_running_loop()
-        self._consumer_list = [
-            loop.create_task(self._consume()) for _ in range(self._max)
-        ]
+    @property
+    def empty(self) -> bool:
+        return self._queue.empty()
 
-    async def _consume(self):
-        while True:
-            async with self._pop_task() as task, self._active_guard():
-                try:
-                    await regular_call(task)
-                except Exception:
-                    getLogger(__name__).exception("uncaught exception")
+    @property
+    def full(self) -> bool:
+        return self._queue.full()
 
-            async with self._waiting_idle:
-                if self.idle:
-                    self._waiting_idle.notify_all()
+    def __enter__(self) -> Self:
+        return self
 
-    def _reset(self):
-        self._queue = asyncio.PriorityQueue()
-        self._active_count = 0
-        self._shutting_down = False
-        self._consumer_list = None
+    def __exit__(self, e, et, tb) -> None:
+        self.purge()
 
-    def _get_internal_queue(self):
-        return self._queue._queue
+    async def push(self, runnable: Runnable, priority: int = 0) -> None:
+        self._id = self._id + 1
+        await self._queue.put((priority, self._id, runnable))
 
-    def _set_internal_queue(self, nq):
-        self._queue._queue = nq
+    def push_nowait(self, runnable: Runnable, priority: int = 0) -> None:
+        self._id = self._id + 1
+        self._queue.put_nowait((priority, self._id, runnable))
 
-    @asynccontextmanager
-    async def _active_guard(self):
-        self._active_count += 1
-        try:
-            yield
-        finally:
-            self._active_count -= 1
+    async def consume(self, maxsize: int = 1) -> None:
+        if self._queue.empty():
+            raise ValueError(f"queue must have something to consume")
 
-    @asynccontextmanager
-    async def _pop_task(self):
-        task = await self._queue.get()
-        try:
-            yield task
-        finally:
+        if maxsize <= 0:
+            raise ValueError(f"invalid consumer size: {maxsize}")
+
+        async with TaskGroup() as tg:
+            consumer_list: list[Task[None]] = []
+            while maxsize > 0:
+                task = tg.create_task(_consume(self._queue))
+                consumer_list.append(task)
+                maxsize -= 1
+            try:
+                await self._queue.join()
+            finally:
+                for task in consumer_list:
+                    task.cancel()
+
+    def purge(self) -> None:
+        while not self._queue.empty():
+            (_p, _i, cb) = self._queue.get_nowait()
+            cb.close()
             self._queue.task_done()
+
+
+async def _consume(q: _Queue) -> None:
+    while True:
+        (_p, _i, cb) = await q.get()
+        try:
+            await cb
+        finally:
+            q.task_done()

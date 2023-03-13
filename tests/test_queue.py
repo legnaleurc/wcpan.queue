@@ -1,60 +1,121 @@
-import asyncio
-import unittest
+from asyncio import CancelledError, create_task, sleep
+from unittest import IsolatedAsyncioTestCase
 
-import async_timeout
-
-from wcpan.worker import AsyncQueue
-from .util import NonBlocker, ResultCollector
+from wcpan.worker import AioQueue
 
 
-class TestAsyncQueue(unittest.IsolatedAsyncioTestCase):
-    async def testImmediatelyShutdown(self):
-        async with async_timeout.timeout(0.1):
-            async with AsyncQueue(8) as aq:
-                pass
+class Node:
+    def __init__(self, v: int) -> None:
+        self.v = v
+        self.l: Node | None = None
+        self.r: Node | None = None
 
-    async def testPost(self):
-        async with AsyncQueue(1) as aq:
-            fn = NonBlocker()
-            rc = ResultCollector()
 
-            aq.post(fn)
-            aq.post(rc)
-            await rc.wait()
+def create_tree() -> Node:
+    r = Node(0)
+    r.l = Node(1)
+    r.r = Node(2)
+    r.l.l = Node(3)
+    r.l.r = Node(4)
+    r.r.l = Node(5)
+    r.r.r = Node(6)
+    return r
 
-        self.assertEqual(fn.call_count, 1)
 
-    async def testPostParallel(self):
-        async with AsyncQueue(2) as aq:
-            rc = ResultCollector()
+async def walk_tree(rv: list[int], q: AioQueue, n: Node | None):
+    if not n:
+        return
+    rv.append(n.v)
+    await q.push(walk_tree(rv, q, n.l))
+    await q.push(walk_tree(rv, q, n.r))
 
-            async def wait_one_second():
-                await asyncio.sleep(0.25)
-                rc.add(42)
 
-            aq.post(wait_one_second)
-            aq.post(wait_one_second)
+async def long_task(rv: list[int]):
+    try:
+        rv.append(0)
+        await sleep(60)
+        rv.append(1)
+    except CancelledError:
+        rv.append(2)
+        raise
 
-            async with async_timeout.timeout(0.3):
-                aq.post(rc)
-                await rc.wait()
 
-        self.assertEqual(rc.values, [42, 42])
+async def plain_task(rv: list[str], value: str):
+    rv.append(value)
 
-    async def testFlush(self):
-        async with AsyncQueue(1) as aq:
-            fn1 = NonBlocker(p=2)
-            fn2 = NonBlocker(p=1)
-            rc = ResultCollector()
 
-            aq.post(fn1)
-            aq.post(fn2)
+async def bad_task():
+    raise RuntimeError("I AM ERROR")
 
-            aq.flush(lambda t: t.priority == 2)
 
-            aq.post(rc)
+async def nop():
+    pass
 
-            await rc.wait()
 
-        self.assertEqual(fn1.call_count, 0)
-        self.assertEqual(fn2.call_count, 1)
+class AioQueueTestCase(IsolatedAsyncioTestCase):
+    async def test_bad_queue_size(self):
+        q = AioQueue.fifo()
+        with self.assertRaises(ValueError):
+            await q.consume()
+
+    async def test_bad_consumer_size(self):
+        q = AioQueue.fifo()
+        await q.push(nop())
+        with self.assertRaises(ValueError):
+            await q.consume(-1)
+        q.purge()
+
+    async def test_exception(self):
+        q = AioQueue.fifo()
+        await q.push(bad_task())
+        with self.assertRaises(ExceptionGroup) as e:
+            await q.consume()
+        self.assertEqual(q.size, 0)
+
+    async def test_recursive(self):
+        tree = create_tree()
+        q = AioQueue.fifo()
+        rv: list[int] = []
+        await q.push(walk_tree(rv, q, tree))
+        await q.consume()
+        self.assertEqual(rv, [0, 1, 2, 3, 4, 5, 6])
+
+    async def test_cancel(self):
+        q = AioQueue.fifo()
+        rv: list[int] = []
+        await q.push(long_task(rv))
+        task = create_task(q.consume())
+        await sleep(0)
+        task.cancel()
+        try:
+            await task
+        except CancelledError:
+            pass
+        self.assertEqual(rv, [0, 2])
+        self.assertEqual(q.size, 0)
+
+    async def test_purge(self):
+        q = AioQueue.fifo()
+        await q.push(nop())
+        q.purge()
+        self.assertEqual(q.size, 0)
+
+    async def test_priority(self):
+        q = AioQueue.priority()
+        rv: list[str] = []
+        await q.push(plain_task(rv, "a"), 0)
+        await q.push(plain_task(rv, "b"), 2)
+        await q.push(plain_task(rv, "c"), 1)
+        await q.push(plain_task(rv, "d"), 0)
+        await q.consume()
+        self.assertEqual(rv, ["a", "d", "c", "b"])
+
+    async def test_lifo(self):
+        q = AioQueue.lifo()
+        rv: list[str] = []
+        await q.push(plain_task(rv, "a"))
+        await q.push(plain_task(rv, "b"))
+        await q.push(plain_task(rv, "c"))
+        await q.push(plain_task(rv, "d"))
+        await q.consume()
+        self.assertEqual(rv, ["d", "c", "b", "a"])
