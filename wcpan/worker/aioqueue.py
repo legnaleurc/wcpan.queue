@@ -1,4 +1,4 @@
-from asyncio import CancelledError, Queue, Task, TaskGroup
+from asyncio import Queue, Task, TaskGroup
 from collections.abc import Coroutine
 from logging import getLogger
 from typing import TypeAlias
@@ -34,21 +34,11 @@ async def consume_all(q: AioQueue, maxsize: int = 1) -> None:
             task = tg.create_task(_consume(q))
             consumer_list.append(task)
             maxsize -= 1
-
         try:
             await q.join()
         finally:
-            await _cancel_all(consumer_list)
-
-
-async def _cancel_all(task_list: list[Task]) -> None:
-    for task in task_list:
-        task.cancel()
-        try:
-            await task
-        except CancelledError:
-            # have to consume the exception
-            getLogger(__name__).debug("consumer cancelled")
+            for task in consumer_list:
+                task.cancel()
 
 
 def purge_queue(q: AioQueue) -> None:
