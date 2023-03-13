@@ -5,7 +5,7 @@ from typing import TypeAlias
 
 
 Callback: TypeAlias = Coroutine[None, None, None]
-AioQueue: TypeAlias = Queue[Callback | None]
+AioQueue: TypeAlias = Queue[Callback]
 
 
 def create_queue(maxsize: int = 0) -> AioQueue:
@@ -15,8 +15,6 @@ def create_queue(maxsize: int = 0) -> AioQueue:
 async def consume(q: AioQueue) -> None:
     while True:
         cb = await q.get()
-        if not cb:
-            break
         try:
             await cb
         finally:
