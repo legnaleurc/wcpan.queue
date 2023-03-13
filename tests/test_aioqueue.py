@@ -1,7 +1,7 @@
 from asyncio import CancelledError, create_task, sleep
 from unittest import IsolatedAsyncioTestCase
 
-from wcpan.worker import AioQueue, consume_all, create_queue
+from wcpan.worker import AioQueue, consume_all, create_queue, purge_queue
 
 
 class Node:
@@ -40,6 +40,10 @@ async def long_task(rv: list[int]):
         raise
 
 
+async def bad_task():
+    raise RuntimeError("I AM ERROR")
+
+
 async def nop():
     pass
 
@@ -55,8 +59,14 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         await q.put(nop())
         with self.assertRaises(ValueError):
             await consume_all(q, -1)
-        # consumes again to make sure all queued item is awaited
-        await consume_all(q)
+        purge_queue(q)
+
+    async def test_exception(self):
+        q = create_queue()
+        await q.put(bad_task())
+        with self.assertRaises(ExceptionGroup) as e:
+            await consume_all(q)
+        self.assertEqual(q.qsize(), 0)
 
     async def test_recursive(self):
         tree = create_tree()
@@ -78,3 +88,10 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         except CancelledError:
             pass
         self.assertEqual(rv, [0, 2])
+        self.assertEqual(q.qsize(), 0)
+
+    async def test_purge(self):
+        q = create_queue()
+        await q.put(nop())
+        purge_queue(q)
+        self.assertEqual(q.qsize(), 0)

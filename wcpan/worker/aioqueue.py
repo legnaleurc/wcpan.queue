@@ -12,7 +12,7 @@ def create_queue(maxsize: int = 0) -> AioQueue:
     return Queue(maxsize)
 
 
-async def consume(q: AioQueue) -> None:
+async def _consume(q: AioQueue) -> None:
     while True:
         cb = await q.get()
         try:
@@ -21,7 +21,7 @@ async def consume(q: AioQueue) -> None:
             q.task_done()
 
 
-async def consume_all(q: AioQueue, maxsize: int = 1):
+async def consume_all(q: AioQueue, maxsize: int = 1) -> None:
     if q.empty():
         raise ValueError(f"queue must have something to consume")
 
@@ -31,15 +31,29 @@ async def consume_all(q: AioQueue, maxsize: int = 1):
     async with TaskGroup() as tg:
         consumer_list: list[Task[None]] = []
         while maxsize > 0:
-            task = tg.create_task(consume(q))
+            task = tg.create_task(_consume(q))
             consumer_list.append(task)
             maxsize -= 1
 
-        await q.join()
-        for task in consumer_list:
-            task.cancel()
-            try:
-                await task
-            except CancelledError:
-                # have to consume the exception
-                getLogger(__name__).debug("consumer cancelled")
+        try:
+            await q.join()
+        finally:
+            await _cancel_all(consumer_list)
+
+
+async def _cancel_all(task_list: list[Task]) -> None:
+    for task in task_list:
+        task.cancel()
+        try:
+            await task
+        except CancelledError:
+            # have to consume the exception
+            getLogger(__name__).debug("consumer cancelled")
+
+
+def purge_queue(q: AioQueue) -> None:
+    getLogger(__name__).debug(f"purge {q.qsize} items in the queue")
+    while not q.empty():
+        coro = q.get_nowait()
+        coro.close()
+        q.task_done()
