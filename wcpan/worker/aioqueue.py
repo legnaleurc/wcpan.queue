@@ -52,7 +52,7 @@ async def _cancel_all(task_list: list[Task]) -> None:
 
 
 def purge_queue(q: AioQueue) -> None:
-    getLogger(__name__).debug(f"purge {q.qsize} items in the queue")
+    getLogger(__name__).debug(f"purge {q.qsize()} items in the queue")
     while not q.empty():
         coro = q.get_nowait()
         coro.close()
