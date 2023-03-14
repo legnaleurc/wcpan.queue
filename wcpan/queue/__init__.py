@@ -1,5 +1,10 @@
 from asyncio import LifoQueue, PriorityQueue, Queue, Task, TaskGroup
+from importlib.metadata import version
 from typing import Coroutine, Self, TypeAlias
+
+
+__version__ = version(__package__ or __name__)
+__all__ = ("AioQueue",)
 
 
 Runnable: TypeAlias = Coroutine[None, None, None]

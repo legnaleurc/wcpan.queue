@@ -1,9 +1,9 @@
-# wcpan.worker
+# wcpan.queue
 
 An utility for `asyncio.Queue`.
 
 ```python
-from wcpan.worker import AioQueue
+from wcpan.queue import AioQueue
 
 
 async def task(): ...

@@ -1,7 +1,7 @@
 from asyncio import CancelledError, create_task, sleep
 from unittest import IsolatedAsyncioTestCase
 
-from wcpan.worker import AioQueue
+from wcpan.queue import AioQueue
 
 
 class Node:
