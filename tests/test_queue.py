@@ -1,4 +1,5 @@
 from asyncio import CancelledError, create_task, sleep
+from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
 from wcpan.queue import AioQueue
@@ -22,7 +23,7 @@ def create_tree() -> Node:
     return r
 
 
-async def void_walk_tree(rv: list[int], q: AioQueue, n: Node | None) -> None:
+async def void_walk_tree(rv: list[int], q: AioQueue[Any], n: Node | None) -> None:
     if not n:
         return
     rv.append(n.v)
@@ -66,7 +67,7 @@ async def nop():
 
 class AioQueueTestCase(IsolatedAsyncioTestCase):
     async def test_bad_queue_size(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         with self.assertRaises(ValueError):
             await q.consume()
         with self.assertRaises(ValueError):
@@ -74,14 +75,14 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
                 pass
 
     async def test_bad_consumer_size(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         await q.push(nop())
         with self.assertRaises(ValueError):
             await q.consume(-1)
         q.purge()
 
     async def test_bad_collector_size(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         await q.push(nop())
         with self.assertRaises(ValueError):
             async for _ in q.collect(-1):
@@ -89,14 +90,14 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         q.purge()
 
     async def test_consume_exception(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         await q.push(bad_task())
-        with self.assertRaises(ExceptionGroup) as e:
+        with self.assertRaises(ExceptionGroup):
             await q.consume()
         self.assertEqual(q.size, 0)
 
     async def test_collect_exception(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         await q.push(bad_task())
         with self.assertRaises(ExceptionGroup):
             async for _ in q.collect():
@@ -104,7 +105,7 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
 
     async def test_consume_recursive(self):
         tree = create_tree()
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         rv: list[int] = []
         await q.push(void_walk_tree(rv, q, tree))
         await q.consume()
@@ -118,7 +119,7 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         self.assertEqual(rv, [0, 1, 2, 3, 4, 5, 6])
 
     async def test_consume_cancel(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         rv: list[int] = []
         await q.push(long_task(rv))
         task = create_task(q.consume())
@@ -132,7 +133,7 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         self.assertEqual(q.size, 0)
 
     async def test_collect_cancel(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         rv: list[int] = []
         await q.push(long_task(rv))
 
@@ -151,13 +152,13 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         self.assertEqual(q.size, 0)
 
     async def test_purge(self):
-        q = AioQueue.fifo()
+        q = AioQueue[None].fifo()
         await q.push(nop())
         q.purge()
         self.assertEqual(q.size, 0)
 
     async def test_consume_priority(self):
-        q = AioQueue.priority()
+        q = AioQueue[None].priority()
         rv: list[str] = []
         await q.push(void_task(rv, "a"), 0)
         await q.push(void_task(rv, "b"), 2)
@@ -176,7 +177,7 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         self.assertEqual(rv, ["a", "d", "c", "b"])
 
     async def test_consume_lifo(self):
-        q = AioQueue.lifo()
+        q = AioQueue[None].lifo()
         rv: list[str] = []
         await q.push(void_task(rv, "a"))
         await q.push(void_task(rv, "b"))
