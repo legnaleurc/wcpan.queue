@@ -22,7 +22,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Check Style
+      - name: Install
+        run: make
+      - name: Lint
         run: make lint
-      - name: Run tests
+      - name: Test
         run: make test
