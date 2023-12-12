@@ -1,6 +1,7 @@
 from asyncio import LifoQueue, PriorityQueue, Queue, Task, TaskGroup
-from collections.abc import AsyncGenerator, Coroutine
+from collections.abc import AsyncGenerator, Coroutine, Callable
 from contextlib import asynccontextmanager
+from functools import partial
 from importlib.metadata import version
 from typing import Self
 
@@ -12,6 +13,7 @@ __all__ = ("AioQueue",)
 type AioCoroutine[T] = Coroutine[None, None, T]
 type _SortableJob[T] = tuple[int, int, AioCoroutine[T]]
 type _Queue[T] = Queue[_SortableJob[T]]
+type _Worker[T] = Callable[[], AioCoroutine[T]]
 
 
 class AioQueue[T]:
@@ -68,7 +70,7 @@ class AioQueue[T]:
         if maxsize <= 0:
             raise ValueError(f"invalid consumer size: {maxsize}")
 
-        async with _spawn(maxsize, _consume(self._queue)):
+        async with _spawn(maxsize, partial(_consume, self._queue)):
             await self._queue.join()
 
     async def collect(self, maxsize: int = 1) -> AsyncGenerator[T, None]:
@@ -79,7 +81,7 @@ class AioQueue[T]:
             raise ValueError(f"invalid collector size: {maxsize}")
 
         result = Queue[T]()
-        async with _spawn(maxsize, _collect(self._queue, result)) as group:
+        async with _spawn(maxsize, partial(_collect, self._queue, result)) as group:
             producer = group.create_task(self._queue.join())
             consumer = group.create_task(result.join())
             while not producer.done() or not result.empty():
@@ -98,17 +100,18 @@ class AioQueue[T]:
 
 
 @asynccontextmanager
-async def _spawn[T](maxsize: int, worker: AioCoroutine[T]):
+async def _spawn[T](maxsize: int, worker: _Worker[T]):
     async with TaskGroup() as group:
         task_list: list[Task[T]] = []
         while maxsize > 0:
-            task = group.create_task(worker)
+            task = group.create_task(worker())
             task_list.append(task)
             maxsize -= 1
-        try:
-            yield group
-        finally:
-            for task in task_list:
+
+        yield group
+
+        for task in task_list:
+            if not task.done():
                 task.cancel()
 
 

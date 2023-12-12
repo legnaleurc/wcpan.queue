@@ -194,3 +194,22 @@ class AioQueueTestCase(IsolatedAsyncioTestCase):
         await q.push(return_task("d"))
         rv = [_ async for _ in q.collect()]
         self.assertEqual(rv, ["d", "c", "b", "a"])
+
+    async def test_consume_many(self):
+        q = AioQueue[None].fifo()
+        rv: list[str] = []
+        await q.push(void_task(rv, "a"))
+        await q.push(void_task(rv, "b"))
+        await q.push(void_task(rv, "c"))
+        await q.push(void_task(rv, "d"))
+        await q.consume(4)
+        self.assertEqual({"a", "b", "c", "d"}, set(rv))
+
+    async def test_collect_many(self):
+        q = AioQueue[str].fifo()
+        await q.push(return_task("a"))
+        await q.push(return_task("b"))
+        await q.push(return_task("c"))
+        await q.push(return_task("d"))
+        rv = [_ async for _ in q.collect(4)]
+        self.assertEqual({"a", "b", "c", "d"}, set(rv))
