@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wcpan-queue"
-version = "7.2.0"
+version = "7.2.1"
 description = "An utility for asyncio.Queue."
 authors = ["Wei-Cheng Pan <legnaleurc@gmail.com>"]
 license = "MIT"
