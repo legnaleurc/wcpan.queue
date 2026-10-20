@@ -1,5 +1,5 @@
 from asyncio import LifoQueue, PriorityQueue, Queue, Task, TaskGroup
-from collections.abc import AsyncGenerator, Coroutine, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Coroutine
 from contextlib import asynccontextmanager
 from functools import partial
 from importlib.metadata import version
@@ -10,7 +10,7 @@ __version__ = version(__package__ or __name__)
 __all__ = ("AioQueue",)
 
 
-type AioCoroutine[T] = Coroutine[None, None, T]
+type AioCoroutine[T] = Awaitable[T]
 type _SortableJob[T] = tuple[int, int, AioCoroutine[T]]
 type _Queue[T] = Queue[_SortableJob[T]]
 type _Worker[T] = Callable[[], AioCoroutine[T]]
